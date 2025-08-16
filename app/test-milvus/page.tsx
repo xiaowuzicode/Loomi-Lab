@@ -228,7 +228,7 @@ export default function TestMilvusPage() {
                 <Box key={index} p={3} borderWidth={1} borderRadius="md">
                   <Text fontWeight="semibold">{kb.name}</Text>
                   <Text fontSize="sm" color="gray.500">
-                    文档数量: {kb.row_count} | 数据大小: {kb.data_size}
+                    文档数量: {kb.documentCount} | 向量数量: {kb.vectorCount}
                   </Text>
                 </Box>
               ))}

@@ -46,6 +46,7 @@ import {
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import { useMilvus, useDocumentProcessor } from '@/hooks/useMilvus'
+import type { KnowledgeBase } from '@/types'
 import {
   RiSearchLine,
   RiBrainLine,
@@ -64,17 +65,6 @@ import { Card } from '@/components/ui/Card'
 import { StatCard } from '@/components/ui/StatCard'
 
 const MotionBox = motion(Box)
-
-interface KnowledgeBase {
-  id: string
-  name: string
-  description: string
-  document_count: number
-  vector_count: number
-  status: 'active' | 'building' | 'error'
-  created_at: string
-  updated_at: string
-}
 
 interface RAGResult {
   text: string
@@ -223,6 +213,7 @@ export default function KnowledgeBasePage() {
   const getStatusBadge = (status: KnowledgeBase['status']) => {
     const statusConfig = {
       active: { color: 'green', label: '运行中' },
+      inactive: { color: 'gray', label: '未激活' },
       building: { color: 'yellow', label: '构建中' },
       error: { color: 'red', label: '错误' },
     }
@@ -290,14 +281,14 @@ export default function KnowledgeBasePage() {
             />
             <StatCard
               title="总文档数"
-              value={knowledgeBases.reduce((sum, kb) => sum + kb.document_count, 0)}
+              value={knowledgeBases.reduce((sum, kb) => sum + kb.documentCount, 0)}
               icon={RiFileTextLine}
               iconColor="purple.400"
               loading={loading}
             />
             <StatCard
               title="总向量数"
-              value={knowledgeBases.reduce((sum, kb) => sum + kb.vector_count, 0)}
+              value={knowledgeBases.reduce((sum, kb) => sum + kb.vectorCount, 0)}
               icon={RiTestTubeLine}
               iconColor="orange.400"
               loading={loading}
@@ -429,13 +420,13 @@ export default function KnowledgeBasePage() {
                                 <VStack align="start" spacing={1}>
                                   <Text fontSize="xs" color="gray.400">文档数量</Text>
                                   <Text fontWeight="semibold" color="blue.500">
-                                    {formatNumber(kb.document_count)}
+                                    {formatNumber(kb.documentCount)}
                                   </Text>
                                 </VStack>
                                 <VStack align="start" spacing={1}>
                                   <Text fontSize="xs" color="gray.400">向量数量</Text>
                                   <Text fontWeight="semibold" color="purple.500">
-                                    {formatNumber(kb.vector_count)}
+                                    {formatNumber(kb.vectorCount)}
                                   </Text>
                                 </VStack>
                               </Grid>
@@ -448,7 +439,7 @@ export default function KnowledgeBasePage() {
                               )}
 
                               <Text fontSize="xs" color="gray.400">
-                                更新时间: {formatDate(kb.updated_at)}
+                                更新时间: {formatDate(kb.updatedAt.toString())}
                               </Text>
                             </VStack>
                           </Card>

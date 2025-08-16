@@ -43,7 +43,6 @@ import {
   Image,
   Avatar,
   Switch,
-  Calendar,
   Progress,
   Divider,
 } from '@chakra-ui/react'

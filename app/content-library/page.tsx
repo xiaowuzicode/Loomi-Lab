@@ -55,7 +55,7 @@ import {
   RiHeartLine,
   RiShareLine,
   RiFireLine,
-  RiTrendingUpLine,
+  RiLineChartLine,
 } from 'react-icons/ri'
 import { PageLayout } from '@/components/layout/PageLayout'
 import { Card } from '@/components/ui/Card'
@@ -315,7 +315,7 @@ export default function ContentLibraryPage() {
               title="平均互动率"
               value={avgEngagement.toFixed(1)}
               suffix="%"
-              icon={RiTrendingUpLine}
+              icon={RiLineChartLine}
               iconColor="purple.400"
               loading={loading}
             />

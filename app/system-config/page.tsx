@@ -318,9 +318,7 @@ export default function SystemConfigPage() {
         return (
           <Input
             value={config.is_sensitive ? '••••••••••••••••••••' : config.value as string}
-            onChange={(e) => handleConfigChange(config.id, e.target.value)}
             type={config.is_sensitive ? 'password' : 'text'}
-            size="sm"
             maxW="300px"
             {...commonProps}
           />

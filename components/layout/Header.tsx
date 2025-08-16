@@ -32,6 +32,8 @@ import {
   RiLogoutBoxLine,
   RiFullscreenLine,
 } from 'react-icons/ri'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/hooks/useAuth'
 
 const MotionBox = motion(Box)
 const MotionFlex = motion(Flex)
@@ -45,14 +47,21 @@ interface HeaderProps {
 
 export function Header({
   onToggleSidebar,
-  userName = 'Admin User',
+  userName,
   userAvatar,
-  userRole = 'administrator',
+  userRole,
 }: HeaderProps) {
   const { colorMode, toggleColorMode } = useColorMode()
   const bgColor = useColorModeValue('white', 'gray.800')
   const borderColor = useColorModeValue('gray.200', 'gray.700')
   const searchBg = useColorModeValue('gray.50', 'gray.700')
+  const router = useRouter()
+  const { user, logout } = useAuth()
+  
+  // 使用认证用户信息或传入的props
+  const displayName = userName || user?.username || 'Admin User'
+  const displayRole = userRole || (user?.role === 'admin' ? '管理员' : user?.role || 'administrator')
+  const displayAvatar = userAvatar || '/images/loomi-icon.svg'
 
   const notifications = [
     { id: 1, title: '新用户注册', time: '2分钟前', unread: true },
@@ -194,16 +203,16 @@ export function Header({
                 <HStack spacing={3}>
                   <VStack spacing={0} align="end" display={{ base: 'none', md: 'flex' }}>
                     <Text fontSize="sm" fontWeight="medium">
-                      {userName}
+                      {displayName}
                     </Text>
                     <Text fontSize="xs" color="gray.500">
-                      {userRole}
+                      {displayRole}
                     </Text>
                   </VStack>
                   <Avatar
                     size="sm"
-                    name={userName}
-                    src={userAvatar}
+                    name={displayName}
+                    src={displayAvatar}
                     bg="primary.500"
                     color="white"
                   />
@@ -211,14 +220,24 @@ export function Header({
               </MotionFlex>
             </MenuButton>
             <MenuList>
-              <MenuItem icon={<RiUserLine />}>
+              <MenuItem 
+                icon={<RiUserLine />}
+                onClick={() => router.push('/profile')}
+              >
                 个人资料
               </MenuItem>
-              <MenuItem icon={<RiSettingsLine />}>
+              <MenuItem 
+                icon={<RiSettingsLine />}
+                onClick={() => router.push('/settings')}
+              >
                 账户设置
               </MenuItem>
               <MenuDivider />
-              <MenuItem icon={<RiLogoutBoxLine />} color="red.500">
+              <MenuItem 
+                icon={<RiLogoutBoxLine />} 
+                color="red.500"
+                onClick={logout}
+              >
                 退出登录
               </MenuItem>
             </MenuList>

@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import { useToast } from '@chakra-ui/react'
+import type { KnowledgeBase } from '@/types'
 
-interface KnowledgeBase {
+interface MilvusCollection {
   name: string
   row_count: number
   data_size: string
@@ -41,11 +42,24 @@ export function useMilvus() {
     
     try {
       const response = await fetch('/api/knowledge-base?action=list')
-      const result: ApiResponse<KnowledgeBase[]> = await response.json()
+      const result: ApiResponse<MilvusCollection[]> = await response.json()
       
       if (result.success && result.data) {
-        setKnowledgeBases(result.data)
-        return result.data
+        // 将 Milvus 集合数据映射为 KnowledgeBase 格式
+        const knowledgeBases: KnowledgeBase[] = result.data.map((collection, index) => ({
+          id: `kb_${index + 1}`,
+          name: collection.name,
+          description: `知识库: ${collection.name}`,
+          type: 'general' as const,
+          status: collection.row_count > 0 ? 'active' as const : 'inactive' as const,
+          documentCount: collection.row_count,
+          vectorCount: collection.row_count,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }))
+        
+        setKnowledgeBases(knowledgeBases)
+        return knowledgeBases
       } else {
         throw new Error(result.error || '获取知识库列表失败')
       }
@@ -273,9 +287,25 @@ export function useMilvus() {
   const getKnowledgeBaseStats = async (collectionName: string) => {
     try {
       const response = await fetch(`/api/knowledge-base?action=stats&collection=${encodeURIComponent(collectionName)}`)
-      const result: ApiResponse<KnowledgeBase> = await response.json()
+      const result: ApiResponse<MilvusCollection> = await response.json()
       
-      return result.success ? result.data : null
+      if (result.success && result.data) {
+        // 将 Milvus 统计数据映射为 KnowledgeBase 格式
+        const kbStats: KnowledgeBase = {
+          id: `kb_${collectionName}`,
+          name: result.data.name,
+          description: `知识库: ${result.data.name}`,
+          type: 'general' as const,
+          status: result.data.row_count > 0 ? 'active' as const : 'inactive' as const,
+          documentCount: result.data.row_count,
+          vectorCount: result.data.row_count,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+        return kbStats
+      }
+      
+      return null
     } catch (err) {
       console.error('获取知识库统计失败:', err)
       return null

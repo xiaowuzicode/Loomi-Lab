@@ -19,6 +19,8 @@ import {
   useToast,
   Checkbox,
   Link,
+  Alert,
+  AlertIcon,
 } from '@chakra-ui/react'
 import { motion } from 'framer-motion'
 import { useState } from 'react'
@@ -29,9 +31,11 @@ import {
   RiMailLine,
   RiLockLine,
   RiSparklingFill,
+  RiUserLine,
 } from 'react-icons/ri'
 import { Card } from '@/components/ui/Card'
 import { GlowingButton } from '@/components/ui/GlowingButton'
+import { useAuth } from '@/hooks/useAuth'
 
 const MotionBox = motion(Box)
 const MotionContainer = motion(Container)
@@ -46,6 +50,13 @@ export default function LoginPage() {
 
   const router = useRouter()
   const toast = useToast()
+  const { login, isAuthenticated } = useAuth()
+
+  // 如果已经登录，重定向到仪表板
+  if (isAuthenticated) {
+    router.push('/dashboard')
+    return null
+  }
 
   const bgGradient = useColorModeValue(
     'linear(to-br, blue.50, purple.50, pink.50)',
@@ -57,15 +68,11 @@ export default function LoginPage() {
     const newErrors: { email?: string; password?: string } = {}
     
     if (!email) {
-      newErrors.email = '请输入邮箱地址'
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      newErrors.email = '请输入有效的邮箱地址'
+      newErrors.email = '请输入用户名或邮箱'
     }
     
     if (!password) {
       newErrors.password = '请输入密码'
-    } else if (password.length < 6) {
-      newErrors.password = '密码长度至少为6位'
     }
     
     setErrors(newErrors)
@@ -80,26 +87,12 @@ export default function LoginPage() {
     setIsLoading(true)
     
     try {
-      // 模拟登录API调用
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      
-      toast({
-        title: '登录成功',
-        description: '欢迎回到 Loomi-Lab！',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      })
-      
-      router.push('/dashboard')
+      const result = await login({ email, password })
+      if (!result.success) {
+        // 错误已在 useAuth 中处理，这里不需要额外处理
+      }
     } catch (error) {
-      toast({
-        title: '登录失败',
-        description: '邮箱或密码错误',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      })
+      console.error('Login error:', error)
     } finally {
       setIsLoading(false)
     }
@@ -201,15 +194,15 @@ export default function LoginPage() {
                   {/* Email Input */}
                   <FormControl isInvalid={!!errors.email}>
                     <FormLabel fontSize="sm" fontWeight="medium">
-                      邮箱地址
+                      用户名/邮箱
                     </FormLabel>
                     <InputGroup>
                       <InputLeftElement>
-                        <RiMailLine color="gray.400" />
+                        <RiUserLine color="gray.400" />
                       </InputLeftElement>
                       <Input
-                        type="email"
-                        placeholder="请输入您的邮箱"
+                        type="text"
+                        placeholder="admin 或输入您的邮箱"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         bg={useColorModeValue('white', 'gray.700')}
@@ -284,6 +277,15 @@ export default function LoginPage() {
                       忘记密码？
                     </Link>
                   </HStack>
+
+                  {/* Default Admin Info */}
+                  <Alert status="info" borderRadius="md">
+                    <AlertIcon />
+                    <VStack align="start" spacing={1} fontSize="sm">
+                      <Text fontWeight="medium">默认管理员账户:</Text>
+                      <Text>用户名: <code>admin</code> | 密码: <code>admin123</code></Text>
+                    </VStack>
+                  </Alert>
 
                   {/* Login Button */}
                   <GlowingButton

@@ -1,0 +1,171 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { useToast } from '@chakra-ui/react'
+import type { AuthUser, LoginRequest, LoginResponse, ApiResponse } from '@/types'
+
+interface AuthState {
+  user: AuthUser | null
+  token: string | null
+  isLoading: boolean
+  isAuthenticated: boolean
+}
+
+export function useAuth() {
+  const [authState, setAuthState] = useState<AuthState>({
+    user: null,
+    token: null,
+    isLoading: true,
+    isAuthenticated: false
+  })
+  
+  const router = useRouter()
+  const toast = useToast()
+
+  // 初始化认证状态
+  useEffect(() => {
+    const initAuth = () => {
+      const token = localStorage.getItem('auth_token')
+      const userStr = localStorage.getItem('auth_user')
+      
+      if (token && userStr) {
+        try {
+          const user = JSON.parse(userStr) as AuthUser
+          setAuthState({
+            user,
+            token,
+            isLoading: false,
+            isAuthenticated: true
+          })
+        } catch (error) {
+          // 清除无效数据
+          localStorage.removeItem('auth_token')
+          localStorage.removeItem('auth_user')
+          setAuthState(prev => ({
+            ...prev,
+            isLoading: false
+          }))
+        }
+      } else {
+        setAuthState(prev => ({
+          ...prev,
+          isLoading: false
+        }))
+      }
+    }
+
+    initAuth()
+  }, [])
+
+  // 登录
+  const login = useCallback(async (credentials: LoginRequest) => {
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+      })
+
+      const result: ApiResponse<LoginResponse> = await response.json()
+
+      if (result.success && result.data) {
+        const { user, token } = result.data
+        
+        // 保存到localStorage
+        localStorage.setItem('auth_token', token)
+        localStorage.setItem('auth_user', JSON.stringify(user))
+        
+        // 更新状态
+        setAuthState({
+          user,
+          token,
+          isLoading: false,
+          isAuthenticated: true
+        })
+
+        toast({
+          title: '登录成功',
+          description: `欢迎回来，${user.username}！`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        })
+
+        // 跳转到仪表板
+        router.push('/dashboard')
+        return { success: true }
+      } else {
+        toast({
+          title: '登录失败',
+          description: result.error || '登录失败，请检查用户名和密码',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        })
+        return { success: false, error: result.error }
+      }
+    } catch (error) {
+      const errorMessage = '网络错误，请稍后重试'
+      toast({
+        title: '登录失败',
+        description: errorMessage,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+      return { success: false, error: errorMessage }
+    }
+  }, [toast, router])
+
+  // 退出登录
+  const logout = useCallback(() => {
+    // 清除存储
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('auth_user')
+    
+    // 重置状态
+    setAuthState({
+      user: null,
+      token: null,
+      isLoading: false,
+      isAuthenticated: false
+    })
+
+    toast({
+      title: '已退出登录',
+      description: '感谢您的使用！',
+      status: 'info',
+      duration: 3000,
+      isClosable: true,
+    })
+
+    // 跳转到登录页
+    router.push('/login')
+  }, [toast, router])
+
+  // 检查用户是否有特定权限
+  const hasPermission = useCallback((requiredRole: string) => {
+    if (!authState.user) return false
+    
+    const roleHierarchy = {
+      viewer: 1,
+      operator: 2,
+      admin: 3,
+    }
+
+    const userLevel = roleHierarchy[authState.user.role as keyof typeof roleHierarchy] || 0
+    const requiredLevel = roleHierarchy[requiredRole as keyof typeof roleHierarchy] || 0
+
+    return userLevel >= requiredLevel
+  }, [authState.user])
+
+  return {
+    ...authState,
+    login,
+    logout,
+    hasPermission
+  }
+}

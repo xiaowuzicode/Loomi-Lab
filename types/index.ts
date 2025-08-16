@@ -63,7 +63,7 @@ export interface KnowledgeBase {
   name: string
   description: string
   type: 'persona' | 'domain' | 'general'
-  status: 'active' | 'inactive'
+  status: 'active' | 'inactive' | 'building' | 'error'
   documentCount: number
   vectorCount: number
   createdAt: Date

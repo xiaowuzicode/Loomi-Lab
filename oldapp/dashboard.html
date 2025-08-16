@@ -1,0 +1,1493 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark bg-zinc-950">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loomi - 智能看板</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        'zinc': {
+                            850: '#18181b',
+                            950: '#09090b',
+                        }
+                    },
+                    animation: {
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                        'slide-up': 'slide-up 0.5s ease-out',
+                        'fade-in': 'fade-in 0.6s ease-out',
+                        'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        'glow': {
+                            '0%': { 'box-shadow': '0 0 5px #3b82f6, 0 0 10px #3b82f6, 0 0 15px #3b82f6' },
+                            '100%': { 'box-shadow': '0 0 10px #3b82f6, 0 0 20px #3b82f6, 0 0 30px #3b82f6' }
+                        },
+                        'slide-up': {
+                            '0%': { 'transform': 'translateY(20px)', 'opacity': '0' },
+                            '100%': { 'transform': 'translateY(0)', 'opacity': '1' }
+                        },
+                        'fade-in': {
+                            '0%': { 'opacity': '0' },
+                            '100%': { 'opacity': '1' }
+                        },
+                        'pulse-glow': {
+                            '0%, 100%': { 'box-shadow': '0 0 5px rgba(59, 130, 246, 0.5)' },
+                            '50%': { 'box-shadow': '0 0 20px rgba(59, 130, 246, 0.8)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        .glassmorphism {
+            background: rgba(24, 24, 27, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .neon-border {
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        
+        .metric-card {
+            background: linear-gradient(135deg, rgba(24, 24, 27, 0.9) 0%, rgba(39, 39, 42, 0.9) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            transition: all 0.3s ease;
+        }
+        
+        .metric-card:hover {
+            border-color: rgba(59, 130, 246, 0.5);
+            box-shadow: 0 8px 32px rgba(59, 130, 246, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        .sidebar-bg {
+            background: linear-gradient(180deg, rgba(9, 9, 11, 0.95) 0%, rgba(24, 24, 27, 0.95) 100%);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .content-bg {
+            background: radial-gradient(ellipse at top, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
+                        radial-gradient(ellipse at bottom, rgba(147, 51, 234, 0.1) 0%, transparent 50%),
+                        rgba(9, 9, 11, 1);
+        }
+        
+        .ranking-header {
+            background: linear-gradient(90deg, rgba(59, 130, 246, 0.1) 0%, rgba(147, 51, 234, 0.1) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .ranking-row {
+            background: rgba(24, 24, 27, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.2s ease;
+        }
+        
+        .ranking-row:hover {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-healthy {
+            background: #10b981;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+        }
+        
+        .status-error {
+            background: #ef4444;
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .floating-particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(59, 130, 246, 0.3);
+            border-radius: 50%;
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(180deg); }
+        }
+        
+        .nav-link {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .nav-link::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #3b82f6, #9333ea);
+            transition: width 0.3s ease;
+        }
+        
+        .nav-link:hover::before {
+            width: 100%;
+        }
+        
+        .scrollbar-custom {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(59, 130, 246, 0.3) transparent;
+        }
+        
+        .scrollbar-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .scrollbar-custom::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .scrollbar-custom::-webkit-scrollbar-thumb {
+            background: rgba(59, 130, 246, 0.3);
+            border-radius: 3px;
+        }
+        
+        .scrollbar-custom::-webkit-scrollbar-thumb:hover {
+            background: rgba(59, 130, 246, 0.5);
+        }
+        
+        /* 邮箱截取悬停效果 */
+        .truncate-email {
+            position: relative;
+            overflow: hidden;
+            white-space: nowrap;
+            max-width: 120px;
+            margin: 0 auto;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .truncate-email:hover {
+            z-index: 1000;
+            transform: scale(1.1);
+        }
+        
+        .truncate-email:hover::after {
+            content: attr(data-full-email);
+            position: absolute;
+            top: -35px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(24, 24, 27, 0.95);
+            border: 1px solid rgba(59, 130, 246, 0.5);
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 12px;
+            color: white;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            z-index: 1001;
+            animation: fade-in 0.2s ease-out;
+            max-width: 200px;
+            word-break: break-all;
+        }
+        
+                 .truncate-email:hover::before {
+             content: '';
+             position: absolute;
+             top: -8px;
+             left: 50%;
+             transform: translateX(-50%);
+             width: 0;
+             height: 0;
+             border-left: 5px solid transparent;
+             border-right: 5px solid transparent;
+             border-top: 5px solid rgba(59, 130, 246, 0.5);
+             z-index: 1002;
+         }
+         
+         /* 最活跃用户邮箱截取悬停效果 */
+         .truncate-email-topuser {
+             position: relative;
+             overflow: hidden;
+             white-space: nowrap;
+             cursor: pointer;
+             transition: all 0.3s ease;
+             max-width: 200px;
+         }
+         
+         .truncate-email-topuser:hover {
+             z-index: 1000;
+             transform: scale(1.05);
+         }
+         
+         .truncate-email-topuser:hover::after {
+             content: attr(data-full-email);
+             position: absolute;
+             top: -40px;
+             left: 0;
+             background: rgba(24, 24, 27, 0.95);
+             border: 1px solid rgba(59, 130, 246, 0.5);
+             border-radius: 6px;
+             padding: 8px 12px;
+             font-size: 12px;
+             color: white;
+             white-space: nowrap;
+             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+             backdrop-filter: blur(10px);
+             z-index: 1001;
+             animation: fade-in 0.2s ease-out;
+             min-width: max-content;
+             max-width: 250px;
+             word-break: break-all;
+         }
+         
+         .truncate-email-topuser:hover::before {
+             content: '';
+             position: absolute;
+             top: -8px;
+             left: 20px;
+             width: 0;
+             height: 0;
+             border-left: 5px solid transparent;
+             border-right: 5px solid transparent;
+             border-top: 5px solid rgba(59, 130, 246, 0.5);
+             z-index: 1002;
+         }
+         
+         /* 用户留存下拉选择器样式优化 */
+         #retentionPeriodSelect {
+             background: rgba(39, 39, 42, 0.8);
+             border: 1px solid rgba(75, 85, 99, 0.5);
+             transition: all 0.3s ease;
+             cursor: pointer;
+             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+         }
+         
+         #retentionPeriodSelect:hover {
+             background: rgba(39, 39, 42, 1);
+             border-color: rgba(99, 102, 241, 0.6);
+             box-shadow: 0 0 8px rgba(99, 102, 241, 0.3);
+         }
+         
+         #retentionPeriodSelect:focus {
+             border-color: rgba(99, 102, 241, 0.8);
+             box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+             outline: none;
+         }
+         
+         #retentionPeriodSelect option {
+             background: rgba(39, 39, 42, 0.95);
+             color: #d4d4d8;
+             padding: 4px 8px;
+         }
+    </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen overflow-x-hidden">
+    <div class="floating-particles" id="particles"></div>
+    
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div class="sidebar-bg w-64 p-6 flex flex-col">
+            <!-- Logo & Title -->
+            <div class="flex items-center space-x-3 mb-8">
+                <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-chart-line text-white text-sm"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-white">Loomi</h1>
+                    <p class="text-xs text-zinc-400">智能看板</p>
+                </div>
+            </div>
+            
+            <!-- Status Indicator -->
+            <div class="mb-6">
+                <div class="flex items-center space-x-2 p-3 rounded-lg glassmorphism">
+                    <div class="status-dot status-healthy" id="statusDot"></div>
+                    <div>
+                        <div class="text-sm font-medium text-zinc-200" id="statusText">加载中...</div>
+                        <div class="text-xs text-zinc-500">☀️ 服务状态</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Port Monitor Status -->
+            <div class="mb-8">
+                <div class="space-y-2">
+                    <div class="text-xs font-semibold text-zinc-400 uppercase tracking-wide">端口监控</div>
+                    
+                    <!-- 测试环境 8090 -->
+                    <div class="flex items-center space-x-2 p-2 rounded-lg glassmorphism">
+                        <div class="status-dot status-healthy" id="port8090Dot"></div>
+                        <div class="flex-1">
+                            <div class="text-xs font-medium text-zinc-200">测试环境运行中</div>
+                            <div class="text-xs text-zinc-500">🧪 端口 8090</div>
+                        </div>
+                        <div class="text-xs text-zinc-400" id="port8090Response">--</div>
+                    </div>
+                    
+                    <!-- 生产环境 8099 -->
+                    <div class="flex items-center space-x-2 p-2 rounded-lg glassmorphism">
+                        <div class="status-dot status-healthy" id="port8099Dot"></div>
+                        <div class="flex-1">
+                            <div class="text-xs font-medium text-zinc-200">生产环境运行中</div>
+                            <div class="text-xs text-zinc-500">🚀 端口 8099</div>
+                        </div>
+                        <div class="text-xs text-zinc-400" id="port8099Response">--</div>
+                    </div>
+                    
+                    <!-- 监控状态 -->
+                    <div class="text-xs text-zinc-500 text-center pt-1">
+                        <span>监控频率: 5分钟</span> • 
+                        <span id="portMonitorHost">主机: --</span> • 
+                        <span id="portMonitorLastCheck">上次检查: --</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Navigation -->
+            <nav class="flex-1 space-y-2">
+                <div class="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-3">Analytics</div>
+                <a href="#overview" class="nav-link flex items-center space-x-3 p-3 rounded-lg hover:bg-zinc-800 transition-colors">
+                    <i class="fas fa-tachometer-alt text-blue-400"></i>
+                    <span>Overview</span>
+                </a>
+                <a href="#tokens" class="nav-link flex items-center space-x-3 p-3 rounded-lg hover:bg-zinc-800 transition-colors">
+                    <i class="fas fa-coins text-purple-400"></i>
+                    <span>Token Stats</span>
+                </a>
+                <a href="#users" class="nav-link flex items-center space-x-3 p-3 rounded-lg hover:bg-zinc-800 transition-colors">
+                    <i class="fas fa-users text-green-400"></i>
+                    <span>User Activity</span>
+                </a>
+            </nav>
+            
+            <!-- Footer -->
+            <div class="pt-4 border-t border-zinc-800">
+                <div class="text-xs text-zinc-500 text-center">
+                    <div>Last Updated</div>
+                    <div id="lastUpdated" class="text-zinc-400 font-mono">--</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="flex-1 content-bg overflow-auto scrollbar-custom">
+            <div class="p-6">
+                <!-- Header -->
+                <div class="mb-8">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-2xl font-bold text-white mb-2">访问统计概览</h2>
+                            <p class="text-zinc-400">实时监控系统访问和Token消耗情况</p>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div class="px-3 py-1 bg-blue-500/20 text-blue-400 rounded-full text-sm font-medium">
+                                Live
+                            </div>
+                            <div class="px-3 py-1 bg-zinc-800 text-zinc-300 rounded-full text-sm font-medium">
+                                Auto-refresh: 10min
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Metrics Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
+                    <!-- 1. 总访问次数 -->
+                    <div class="metric-card p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-eye text-white text-xl"></i>
+                            </div>
+                            <div class="text-xs text-zinc-400">总计</div>
+                        </div>
+                        <div class="text-2xl font-bold text-white mb-1" id="totalAccess">--</div>
+                        <div class="text-sm text-zinc-400">总访问次数</div>
+                    </div>
+                    
+                    <!-- 2. 今日新增用户 -->
+                    <div class="metric-card p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-user-plus text-white text-xl"></i>
+                            </div>
+                            <div class="text-xs text-zinc-400">今日</div>
+                        </div>
+                        <div class="text-2xl font-bold text-white mb-1" id="dailyNewUsers">--</div>
+                        <div class="text-sm text-zinc-400">今日新增用户</div>
+                    </div>
+                    
+                    <!-- 3. 老用户留存 -->
+                    <div class="metric-card p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-user-shield text-white text-xl"></i>
+                            </div>
+                            <div class="text-xs text-zinc-400">
+                                <select id="retentionPeriodSelect" class="bg-zinc-800 text-zinc-300 text-xs border border-zinc-600 rounded px-2 py-1 focus:border-indigo-400 focus:outline-none transition-colors">
+                                    <option value="1">当天</option>
+                                    <option value="3">3天内</option>
+                                    <option value="7" selected>7天内</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="text-2xl font-bold text-white mb-1" id="userRetention">--</div>
+                        <div class="text-sm text-zinc-400" id="userRetentionLabel">老用户留存</div>
+                    </div>
+                    
+                    <!-- 4. 今日访问次数 -->
+                    <div class="metric-card p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-gradient-to-r from-green-500 to-green-600 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-calendar-day text-white text-xl"></i>
+                            </div>
+                            <div class="text-xs text-zinc-400">今日</div>
+                        </div>
+                        <div class="text-2xl font-bold text-white mb-1" id="todayAccess">--</div>
+                        <div class="text-sm text-zinc-400">今日访问次数</div>
+                    </div>
+                    
+                    <!-- 5. 今日独立用户 -->
+                    <div class="metric-card p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-users text-white text-xl"></i>
+                            </div>
+                            <div class="text-xs text-zinc-400">活跃</div>
+                        </div>
+                        <div class="text-2xl font-bold text-white mb-1" id="todayUsers">--</div>
+                        <div class="text-sm text-zinc-400">今日独立用户</div>
+                    </div>
+                    
+                    <!-- 6. 最高访问次数 -->
+                    <div class="metric-card p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-crown text-white text-xl"></i>
+                            </div>
+                            <div class="text-xs text-zinc-400">峰值</div>
+                        </div>
+                        <div class="text-2xl font-bold text-white mb-1" id="topUserCount">--</div>
+                        <div class="text-sm text-zinc-400">最高访问次数</div>
+                    </div>
+                </div>
+                
+                <!-- Charts Section -->
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+                    <!-- Daily Chart -->
+                    <div class="xl:col-span-2">
+                        <div class="glassmorphism p-6 rounded-xl">
+                            <div class="flex items-center justify-between mb-6">
+                                <h3 class="text-lg font-semibold text-white">最近7天访问统计</h3>
+                                <div class="flex items-center space-x-2">
+                                    <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
+                                    <span class="text-sm text-zinc-400">访问次数</span>
+                                    <div class="w-3 h-3 bg-purple-500 rounded-full ml-4"></div>
+                                    <span class="text-sm text-zinc-400">用户数</span>
+                                </div>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="dailyChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Monthly Chart -->
+                    <div>
+                        <div class="glassmorphism p-6 rounded-xl">
+                            <h3 class="text-lg font-semibold text-white mb-6">月度趋势</h3>
+                            <div class="chart-container">
+                                <canvas id="monthlyChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Token Statistics Section -->
+                <div class="mb-8">
+                    <h3 class="text-xl font-bold text-white mb-6 flex items-center">
+                        <i class="fas fa-coins text-purple-400 mr-3"></i>
+                        Token消耗统计
+                    </h3>
+                    
+                    <!-- Token Metrics -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                        <div class="metric-card p-6 rounded-xl">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-12 h-12 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-clock text-white text-xl"></i>
+                                </div>
+                                <div class="text-xs text-zinc-400">今日</div>
+                            </div>
+                            <div class="text-2xl font-bold text-white mb-1" id="todayTokens">--</div>
+                            <div class="text-sm text-zinc-400">今日Token消耗</div>
+                        </div>
+                        
+                        <div class="metric-card p-6 rounded-xl">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-12 h-12 bg-gradient-to-r from-cyan-500 to-cyan-600 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-calendar-week text-white text-xl"></i>
+                                </div>
+                                <div class="text-xs text-zinc-400">本周</div>
+                            </div>
+                            <div class="text-2xl font-bold text-white mb-1" id="weeklyTokens">--</div>
+                            <div class="text-sm text-zinc-400">本周Token消耗</div>
+                        </div>
+                        
+                        <div class="metric-card p-6 rounded-xl">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-12 h-12 bg-gradient-to-r from-pink-500 to-pink-600 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-calendar-alt text-white text-xl"></i>
+                                </div>
+                                <div class="text-xs text-zinc-400">本月</div>
+                            </div>
+                            <div class="text-2xl font-bold text-white mb-1" id="monthlyTokens">--</div>
+                            <div class="text-sm text-zinc-400">本月Token消耗</div>
+                        </div>
+                        
+                        <div class="metric-card p-6 rounded-xl">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-12 h-12 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-crown text-white text-xl"></i>
+                                </div>
+                                <div class="text-xs text-zinc-400">活跃</div>
+                            </div>
+                            <div class="text-2xl font-bold text-white mb-1" id="todayTopUsers">--</div>
+                            <div class="text-sm text-zinc-400">今日活跃用户</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Token Charts -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <div class="glassmorphism p-6 rounded-xl">
+                            <h4 class="text-lg font-semibold text-white mb-4">每日Token消耗趋势</h4>
+                            <div class="chart-container">
+                                <canvas id="dailyTokenChart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div class="glassmorphism p-6 rounded-xl">
+                            <h4 class="text-lg font-semibold text-white mb-4">月度Token消耗趋势</h4>
+                            <div class="chart-container">
+                                <canvas id="monthlyTokenChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- User Activity & Rankings -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Top Users -->
+                    <div class="glassmorphism p-6 rounded-xl">
+                        <h3 class="text-lg font-semibold text-white mb-4 flex items-center">
+                            <i class="fas fa-trophy text-yellow-400 mr-3"></i>
+                            最活跃用户
+                        </h3>
+                        <div class="space-y-3" id="topUsersList">
+                            <!-- 动态加载 -->
+                        </div>
+                    </div>
+                    
+                    <!-- Token Rankings -->
+                    <div class="glassmorphism p-6 rounded-xl">
+                        <h3 class="text-lg font-semibold text-white mb-4 flex items-center">
+                            <i class="fas fa-medal text-purple-400 mr-3"></i>
+                            Token消耗排行
+                        </h3>
+                        
+                        <!-- Ranking Header -->
+                        <div class="ranking-header p-3 rounded-lg mb-3">
+                            <div class="grid text-xs font-semibold text-zinc-300" style="grid-template-columns: 50px 120px 90px 60px 70px 60px; gap: 8px;">
+                                <div class="text-center">排名</div>
+                                <div class="text-left pl-2">用户邮箱</div>
+                                <div class="text-center">Token</div>
+                                <div class="text-center">会话</div>
+                                <div class="text-center">平均</div>
+                                <div class="text-center">调用</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Ranking List -->
+                        <div class="space-y-2 max-h-80 overflow-y-auto scrollbar-custom" id="tokenRankingList">
+                            <!-- 动态加载 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading Indicator -->
+    <div class="fixed top-4 right-4 z-50">
+        <div class="bg-zinc-900 text-zinc-100 px-4 py-2 rounded-lg shadow-lg opacity-0 transition-opacity duration-300" id="refreshIndicator">
+            <div class="flex items-center space-x-2">
+                <div class="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                <span class="text-sm">数据更新中...</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 创建粒子背景
+        function createParticles() {
+            const container = document.getElementById('particles');
+            const particleCount = 20;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 6 + 's';
+                particle.style.animationDuration = (Math.random() * 3 + 3) + 's';
+                container.appendChild(particle);
+            }
+        }
+
+        class DashboardManager {
+            constructor() {
+                this.dailyChart = null;
+                this.monthlyChart = null;
+                this.dailyTokenChart = null;
+                this.monthlyTokenChart = null;
+                
+                // 默认配置
+                this.refreshInterval = 600000; // 10分钟（毫秒）
+                this.enableAutoRefresh = true;
+                this.refreshTimer = null;
+                this.portMonitorTimer = null; // 端口监控定时器
+                
+                // 用户留存时间范围
+                this.retentionDaysBack = 7; // 默认7天
+                
+                this.init();
+            }
+
+            async init() {
+                // 创建粒子背景
+                createParticles();
+                
+                // 首先加载配置
+                await this.loadConfig();
+                
+                // 绑定事件监听器
+                this.bindEventListeners();
+                
+                // 然后加载数据
+                await this.loadDashboardData();
+                
+                // 最后启动自动刷新
+                if (this.enableAutoRefresh) {
+                    this.startAutoRefresh();
+                }
+            }
+
+            bindEventListeners() {
+                // 监听用户留存时间范围选择器
+                const retentionSelect = document.getElementById('retentionPeriodSelect');
+                if (retentionSelect) {
+                    retentionSelect.addEventListener('change', (e) => {
+                        this.retentionDaysBack = parseInt(e.target.value);
+                        this.updateRetentionLabel();
+                        this.loadUserRetentionData();
+                    });
+                }
+            }
+
+            updateRetentionLabel() {
+                const label = document.getElementById('userRetentionLabel');
+                const labelMap = {
+                    1: '当天老用户留存',
+                    3: '3天内老用户留存', 
+                    7: '7天内老用户留存'
+                };
+                label.textContent = labelMap[this.retentionDaysBack] || '老用户留存';
+            }
+
+            async loadConfig() {
+                try {
+                    const response = await fetch('/api/dashboard-config');
+                    const result = await response.json();
+                    
+                    if (result.status === 'success') {
+                        const config = result.data;
+                        this.refreshInterval = (config.refreshInterval || 600) * 1000; // 转换为毫秒
+                        this.enableAutoRefresh = config.enableAutoRefresh !== false;
+                    }
+                } catch (error) {
+                    console.warn('获取仪表盘配置失败，使用默认配置:', error);
+                }
+            }
+
+            async loadDashboardData() {
+                try {
+                    this.showRefreshIndicator();
+                    
+                    // 并行加载访问统计和Token统计数据
+                    const [accessResponse, tokenResponse] = await Promise.all([
+                        fetch('/api/dashboard-data'),
+                        fetch('/api/token-stats/dashboard')
+                    ]);
+                    
+                    if (!accessResponse.ok || !tokenResponse.ok) {
+                        throw new Error('Failed to load dashboard data');
+                    }
+                    
+                    const accessData = await accessResponse.json();
+                    const tokenData = await tokenResponse.json();
+                    
+                    if (accessData.status === 'success' && tokenData.status === 'success') {
+                        // 合并数据结构
+                        const combinedData = {
+                            ...accessData.data,
+                            token_stats: tokenData.data.summary,
+                            daily_token_chart: tokenData.data.daily_chart,
+                            monthly_token_chart: tokenData.data.monthly_chart,
+                            token_ranking: tokenData.data.today_ranking
+                        };
+                        
+                        this.updateDashboard(combinedData);
+                    } else {
+                        throw new Error('API returned error status');
+                    }
+                } catch (error) {
+                    console.error('Error loading dashboard data:', error);
+                    this.showError('数据加载失败，请刷新页面重试');
+                } finally {
+                    this.hideRefreshIndicator();
+                }
+
+                // 🎯 加载用户留存数据
+                await this.loadUserRetentionData();
+                
+                // 🎯 加载端口监控数据
+                await this.loadPortMonitorData();
+            }
+
+            async loadUserRetentionData() {
+                try {
+                    this.showRefreshIndicator();
+                    
+                    const response = await fetch(`/user-retention-stats?days_back=${this.retentionDaysBack}`);
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to load user retention data');
+                    }
+                    
+                    const result = await response.json();
+                    
+                    if (result.status === 'success') {
+                        this.animateNumber('userRetention', result.data.retention_count || 0);
+                    } else {
+                        throw new Error('API returned error status');
+                    }
+                } catch (error) {
+                    console.error('Error loading user retention data:', error);
+                    this.animateNumber('userRetention', 0);
+                } finally {
+                    this.hideRefreshIndicator();
+                }
+            }
+
+            async loadPortMonitorData() {
+                try {
+                    const response = await fetch('/health/port-monitor');
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to load port monitor data');
+                    }
+                    
+                    const result = await response.json();
+                    
+                    this.updatePortMonitorDisplay(result);
+                    
+                } catch (error) {
+                    console.error('Error loading port monitor data:', error);
+                    // 显示错误状态
+                    this.updatePortMonitorDisplay({
+                        status: "error",
+                        ports: [],
+                        timestamp: Date.now() / 1000
+                    });
+                }
+            }
+
+            updatePortMonitorDisplay(data) {
+                // 更新各端口状态
+                const ports = data.ports || [];
+                
+                // 查找8090和8099端口的状态
+                const port8090 = ports.find(p => p.port === 8090);
+                const port8099 = ports.find(p => p.port === 8099);
+                
+                // 更新8090端口状态
+                this.updatePortStatus(8090, port8090);
+                
+                // 更新8099端口状态  
+                this.updatePortStatus(8099, port8099);
+                
+                // 更新监控主机信息
+                if (data.monitor_host) {
+                    document.getElementById('portMonitorHost').textContent = `主机: ${data.monitor_host}`;
+                }
+                
+                // 更新最后检查时间
+                if (data.timestamp) {
+                    const lastCheck = new Date(data.timestamp * 1000).toLocaleString('zh-CN', {
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    document.getElementById('portMonitorLastCheck').textContent = `上次检查: ${lastCheck}`;
+                }
+            }
+
+            updatePortStatus(port, portData) {
+                const dotElement = document.getElementById(`port${port}Dot`);
+                const responseElement = document.getElementById(`port${port}Response`);
+                
+                if (!portData) {
+                    // 未找到端口数据
+                    dotElement.className = 'status-dot status-error';
+                    responseElement.textContent = '未知';
+                    return;
+                }
+                
+                // 根据状态设置指示器
+                if (portData.status === 'healthy') {
+                    dotElement.className = 'status-dot status-healthy';
+                    responseElement.textContent = portData.response_time_ms ? 
+                        `${portData.response_time_ms}ms` : '正常';
+                } else {
+                    dotElement.className = 'status-dot status-error';
+                    responseElement.textContent = portData.error || '异常';
+                }
+            }
+
+            updateDashboard(data) {
+                // 更新状态指示器
+                const statusDot = document.getElementById('statusDot');
+                const statusText = document.getElementById('statusText');
+                
+                if (data.status === 'healthy') {
+                    statusDot.className = 'status-dot status-healthy';
+                    statusText.textContent = 'Loomi服务中';
+                } else {
+                    statusDot.className = 'status-dot status-error';
+                    statusText.textContent = data.error || 'Loomi服务异常';
+                }
+
+                // 更新统计卡片
+                if (data.summary) {
+                    this.animateNumber('totalAccess', data.summary.total_access);
+                    this.animateNumber('todayAccess', data.summary.today_access);
+                    this.animateNumber('todayUsers', data.summary.today_users);
+                    
+                    if (data.summary.today_top_user && data.summary.today_top_user.access_count) {
+                        this.animateNumber('topUserCount', data.summary.today_top_user.access_count);
+                    } else {
+                        this.animateNumber('topUserCount', 0);
+                    }
+                }
+
+                // 🎯 更新用户统计卡片
+                if (data.user_statistics) {
+                    this.animateNumber('dailyNewUsers', data.user_statistics.daily_new_users || 0);
+                    // 用户留存数据会通过单独的API调用更新
+                } else {
+                    this.animateNumber('dailyNewUsers', 0);
+                    this.animateNumber('userRetention', 0);
+                }
+
+                // 🎯 更新留存标签显示
+                this.updateRetentionLabel();
+
+                // 更新图表
+                if (data.daily_chart) {
+                    this.updateDailyChart(data.daily_chart);
+                }
+                
+                if (data.monthly_chart) {
+                    this.updateMonthlyChart(data.monthly_chart);
+                }
+
+                // 更新最活跃用户列表
+                if (data.recent_top_users) {
+                    this.updateTopUsers(data.recent_top_users);
+                }
+
+                // 更新Token统计
+                if (data.token_stats) {
+                    const formatTokenCount = (count) => {
+                        if (count >= 100000000) {
+                            return `${(count / 100000000).toFixed(1)}亿`;
+                        } else if (count >= 10000) {
+                            return `${(count / 10000).toFixed(1)}万`;
+                        } else if (count >= 1000) {
+                            return `${(count / 1000).toFixed(1)}k`;
+                        }
+                        return count.toLocaleString();
+                    };
+                    
+                    document.getElementById('todayTokens').textContent = formatTokenCount(data.token_stats.today_tokens || 0);
+                    document.getElementById('weeklyTokens').textContent = formatTokenCount(data.token_stats.weekly_tokens || 0);
+                    document.getElementById('monthlyTokens').textContent = formatTokenCount(data.token_stats.monthly_tokens || 0);
+                    document.getElementById('todayTopUsers').textContent = (data.token_stats.today_top_users || 0).toLocaleString();
+                }
+
+                // 更新Token消耗图表
+                if (data.daily_token_chart) {
+                    this.updateDailyTokenChart(data.daily_token_chart);
+                }
+                if (data.monthly_token_chart) {
+                    this.updateMonthlyTokenChart(data.monthly_token_chart);
+                }
+
+                // 更新用户Token排行榜
+                if (data.token_ranking) {
+                    this.updateTokenRanking(data.token_ranking);
+                }
+
+                // 更新最后更新时间
+                if (data.last_updated) {
+                    const lastUpdated = new Date(data.last_updated).toLocaleString('zh-CN', {
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    document.getElementById('lastUpdated').textContent = lastUpdated;
+                }
+            }
+
+            animateNumber(elementId, targetValue) {
+                const element = document.getElementById(elementId);
+                const startValue = parseInt(element.textContent.replace(/[^\d]/g, '')) || 0;
+                const duration = 1000;
+                const startTime = Date.now();
+                
+                const animate = () => {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const currentValue = Math.floor(startValue + (targetValue - startValue) * progress);
+                    
+                    element.textContent = currentValue.toLocaleString();
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    }
+                };
+                
+                animate();
+            }
+
+            updateDailyChart(chartData) {
+                const ctx = document.getElementById('dailyChart').getContext('2d');
+                
+                if (this.dailyChart) {
+                    this.dailyChart.destroy();
+                }
+
+                this.dailyChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: chartData.labels.map(date => {
+                            const d = new Date(date);
+                            return `${d.getMonth() + 1}/${d.getDate()}`;
+                        }),
+                        datasets: [{
+                            label: '访问次数',
+                            data: chartData.access_counts,
+                            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            yAxisID: 'y'
+                        }, {
+                            label: '独立用户数',
+                            data: chartData.user_counts,
+                            type: 'line',
+                            backgroundColor: 'rgba(147, 51, 234, 0.2)',
+                            borderColor: 'rgba(147, 51, 234, 1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointBackgroundColor: 'rgba(147, 51, 234, 1)',
+                            pointBorderColor: '#ffffff',
+                            pointBorderWidth: 2,
+                            pointRadius: 4,
+                            yAxisID: 'y1'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: {
+                                    display: false
+                                },
+                                ticks: {
+                                    color: '#a1a1aa'
+                                }
+                            },
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                grid: {
+                                    color: 'rgba(161, 161, 170, 0.1)'
+                                },
+                                ticks: {
+                                    color: '#a1a1aa'
+                                }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                grid: {
+                                    drawOnChartArea: false,
+                                },
+                                ticks: {
+                                    color: '#a1a1aa'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            updateMonthlyChart(chartData) {
+                const ctx = document.getElementById('monthlyChart').getContext('2d');
+                
+                if (this.monthlyChart) {
+                    this.monthlyChart.destroy();
+                }
+
+                this.monthlyChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            label: '访问次数',
+                            data: chartData.access_counts,
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+                            pointBorderColor: '#ffffff',
+                            pointBorderWidth: 2,
+                            pointRadius: 4,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: {
+                                    display: false
+                                },
+                                ticks: {
+                                    color: '#a1a1aa'
+                                }
+                            },
+                            y: {
+                                grid: {
+                                    color: 'rgba(161, 161, 170, 0.1)'
+                                },
+                                ticks: {
+                                    color: '#a1a1aa'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            updateTopUsers(topUsers) {
+                const container = document.getElementById('topUsersList');
+                container.innerHTML = '';
+
+                if (Object.keys(topUsers).length === 0) {
+                    container.innerHTML = '<div class="text-center text-zinc-500 py-8">暂无数据</div>';
+                    return;
+                }
+
+                Object.entries(topUsers).forEach(([date, userData], index) => {
+                    const userItem = document.createElement('div');
+                    userItem.className = 'flex items-center justify-between p-3 rounded-lg bg-zinc-800/50 hover:bg-zinc-800 transition-colors';
+                    
+                    const dateObj = new Date(date);
+                    const formattedDate = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+                    
+                    // 🎯 优先显示邮箱，备用显示user_id截取
+                    const fullDisplayName = userData.top_user_display || userData.top_user_email || userData.top_user;
+                    
+                    // 🎯 截取邮箱显示，避免遮挡其他内容
+                    const truncateEmailForTopUsers = (email) => {
+                        if (!email) return '';
+                        
+                        // 如果是邮箱格式
+                        if (email.includes('@')) {
+                            const [username, domain] = email.split('@');
+                            // 用户名部分：超过10个字符则截取前8个字符 + ".."
+                            const truncatedUsername = username.length > 10 ? username.substring(0, 8) + '..' : username;
+                            // 域名部分：超过15个字符则截取前13个字符 + ".."
+                            const truncatedDomain = domain.length > 15 ? domain.substring(0, 13) + '..' : domain;
+                            return `${truncatedUsername}@${truncatedDomain}`;
+                        } else {
+                            // 如果不是邮箱，直接截取
+                            return email.length > 20 ? email.substring(0, 18) + '..' : email;
+                        }
+                    };
+                    
+                    const shortDisplayName = truncateEmailForTopUsers(fullDisplayName);
+                    
+                    userItem.innerHTML = `
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-bold">
+                                ${index + 1}
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="font-medium text-white truncate-email-topuser" 
+                                     title="${fullDisplayName} (原始ID: ${userData.top_user})"
+                                     data-full-email="${fullDisplayName}">
+                                    ${shortDisplayName}
+                                </div>
+                                <div class="text-xs text-zinc-400">${formattedDate} • ${userData.total_users}个用户</div>
+                            </div>
+                        </div>
+                        <div class="text-lg font-bold text-blue-400">${userData.access_count}</div>
+                    `;
+                    
+                    container.appendChild(userItem);
+                });
+            }
+
+            updateDailyTokenChart(chartData) {
+                const ctx = document.getElementById('dailyTokenChart').getContext('2d');
+                
+                if (this.dailyTokenChart) {
+                    this.dailyTokenChart.destroy();
+                }
+
+                const tokenDataInW = chartData.token_counts.map(count => Math.round(count / 10000 * 10) / 10);
+                const maxValue = Math.max(...tokenDataInW);
+                const minValue = Math.min(...tokenDataInW);
+                const range = maxValue - minValue;
+                const yAxisMax = maxValue + range * 0.1;
+                const yAxisMin = Math.max(0, minValue - range * 0.1);
+
+                this.dailyTokenChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            label: 'Token消耗 (万)',
+                            data: tokenDataInW,
+                            backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                            borderColor: 'rgba(249, 115, 22, 1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointBackgroundColor: 'rgba(249, 115, 22, 1)',
+                            pointBorderColor: '#ffffff',
+                            pointBorderWidth: 2,
+                            pointRadius: 4,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: {
+                                    display: false
+                                },
+                                ticks: {
+                                    color: '#a1a1aa'
+                                }
+                            },
+                            y: {
+                                min: yAxisMin,
+                                max: yAxisMax,
+                                grid: {
+                                    color: 'rgba(161, 161, 170, 0.1)'
+                                },
+                                ticks: {
+                                    color: '#a1a1aa',
+                                    callback: function(value) {
+                                        return value.toFixed(1) + '万';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            updateMonthlyTokenChart(chartData) {
+                const ctx = document.getElementById('monthlyTokenChart').getContext('2d');
+                
+                if (this.monthlyTokenChart) {
+                    this.monthlyTokenChart.destroy();
+                }
+
+                const tokenDataInW = chartData.token_counts.map(count => Math.round(count / 10000 * 10) / 10);
+                const maxValue = Math.max(...tokenDataInW);
+                const minValue = Math.min(...tokenDataInW);
+                const range = maxValue - minValue;
+                const yAxisMax = maxValue + range * 0.1;
+                const yAxisMin = Math.max(0, minValue - range * 0.1);
+
+                this.monthlyTokenChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            label: 'Token消耗 (万)',
+                            data: tokenDataInW,
+                            backgroundColor: 'rgba(236, 72, 153, 0.1)',
+                            borderColor: 'rgba(236, 72, 153, 1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointBackgroundColor: 'rgba(236, 72, 153, 1)',
+                            pointBorderColor: '#ffffff',
+                            pointBorderWidth: 2,
+                            pointRadius: 4,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: {
+                                    display: false
+                                },
+                                ticks: {
+                                    color: '#a1a1aa'
+                                }
+                            },
+                            y: {
+                                min: yAxisMin,
+                                max: yAxisMax,
+                                grid: {
+                                    color: 'rgba(161, 161, 170, 0.1)'
+                                },
+                                ticks: {
+                                    color: '#a1a1aa',
+                                    callback: function(value) {
+                                        return value.toFixed(1) + '万';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            updateTokenRanking(rankingData) {
+                const container = document.getElementById('tokenRankingList');
+                container.innerHTML = '';
+
+                if (!rankingData || rankingData.length === 0) {
+                    container.innerHTML = '<div class="text-center text-zinc-500 py-8">暂无数据</div>';
+                    return;
+                }
+
+                const formatTokenCount = (count) => {
+                    if (count >= 100000000) {
+                        return `${(count / 100000000).toFixed(1)}亿`;
+                    } else if (count >= 10000) {
+                        return `${(count / 10000).toFixed(1)}万`;
+                    } else if (count >= 1000) {
+                        return `${(count / 1000).toFixed(1)}k`;
+                    }
+                    return count.toLocaleString();
+                };
+
+                rankingData.slice(0, 10).forEach((userData, index) => {
+                    const userItem = document.createElement('div');
+                    userItem.className = 'ranking-row p-3 rounded-lg';
+                    
+                    const rankColors = ['text-yellow-400', 'text-gray-400', 'text-orange-400'];
+                    const rankColor = index < 3 ? rankColors[index] : 'text-zinc-400';
+                    
+                    // 🎯 优先显示邮箱，备用显示user_id截取
+                    const fullDisplayName = userData.user_display || userData.user_email || userData.user_id;
+                    
+                    // 🎯 截取邮箱显示，避免遮挡其他列
+                    const truncateEmail = (email) => {
+                        if (!email) return '';
+                        
+                        // 如果是邮箱格式
+                        if (email.includes('@')) {
+                            const [username, domain] = email.split('@');
+                            // 用户名部分：超过8个字符则截取前6个字符 + ".."
+                            const truncatedUsername = username.length > 8 ? username.substring(0, 6) + '..' : username;
+                            // 域名部分：超过12个字符则截取前10个字符 + ".."
+                            const truncatedDomain = domain.length > 12 ? domain.substring(0, 10) + '..' : domain;
+                            return `${truncatedUsername}@${truncatedDomain}`;
+                        } else {
+                            // 如果不是邮箱，直接截取
+                            return email.length > 16 ? email.substring(0, 14) + '..' : email;
+                        }
+                    };
+                    
+                    const shortDisplayName = truncateEmail(fullDisplayName);
+                    
+                    userItem.innerHTML = `
+                        <div class="grid text-sm" style="grid-template-columns: 50px 120px 90px 60px 70px 60px; gap: 8px; align-items: center;">
+                            <div class="text-center font-bold ${rankColor}">${index + 1}</div>
+                            <div class="text-left pl-2 text-white font-medium truncate-email" 
+                                 title="${fullDisplayName} (原始ID: ${userData.user_id})"
+                                 data-full-email="${fullDisplayName}">
+                                ${shortDisplayName}
+                            </div>
+                            <div class="text-center text-blue-400 font-bold">${formatTokenCount(userData.total_tokens)}</div>
+                            <div class="text-center text-zinc-300">${userData.session_count}</div>
+                            <div class="text-center text-zinc-300">${userData.avg_tokens_per_session.toFixed(0)}</div>
+                            <div class="text-center text-zinc-300">${userData.llm_calls}</div>
+                        </div>
+                    `;
+                    
+                    container.appendChild(userItem);
+                });
+            }
+
+            showRefreshIndicator() {
+                const indicator = document.getElementById('refreshIndicator');
+                indicator.style.opacity = '1';
+            }
+
+            hideRefreshIndicator() {
+                const indicator = document.getElementById('refreshIndicator');
+                indicator.style.opacity = '0';
+            }
+
+            showError(message) {
+                const statusDot = document.getElementById('statusDot');
+                const statusText = document.getElementById('statusText');
+                
+                statusDot.className = 'status-dot status-error';
+                statusText.textContent = message;
+            }
+
+            startAutoRefresh() {
+                this.refreshTimer = setInterval(() => {
+                    this.loadDashboardData();
+                }, this.refreshInterval);
+                
+                // 端口监控单独刷新，频率更高（每2分钟）
+                this.portMonitorTimer = setInterval(() => {
+                    this.loadPortMonitorData();
+                }, 120000); // 2分钟
+            }
+
+            stopAutoRefresh() {
+                if (this.refreshTimer) {
+                    clearInterval(this.refreshTimer);
+                    this.refreshTimer = null;
+                }
+                
+                if (this.portMonitorTimer) {
+                    clearInterval(this.portMonitorTimer);
+                    this.portMonitorTimer = null;
+                }
+            }
+        }
+
+        // 页面加载完成后初始化仪表盘
+        document.addEventListener('DOMContentLoaded', () => {
+            new DashboardManager();
+        });
+
+        // 页面可见性变化时控制刷新
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                if (window.dashboardManager) {
+                    window.dashboardManager.stopAutoRefresh();
+                }
+            } else {
+                if (window.dashboardManager) {
+                    window.dashboardManager.startAutoRefresh();
+                    window.dashboardManager.loadDashboardData();
+                }
+            }
+        });
+    </script>
+</body>
+</html> 

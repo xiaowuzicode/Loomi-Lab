@@ -17,6 +17,29 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    // 默认管理员账户
+    if (email === 'admin' && password === 'admin123') {
+      const authUser = {
+        id: 'admin-001',
+        email: 'admin@loomi.com',
+        username: 'admin',
+        role: 'admin'
+      }
+      
+      const token = generateToken(authUser)
+
+      const response: LoginResponse = {
+        user: authUser,
+        token
+      }
+
+      return NextResponse.json<ApiResponse<LoginResponse>>({
+        success: true,
+        data: response,
+        message: '登录成功'
+      })
+    }
+
     if (!isValidEmail(email)) {
       return NextResponse.json<ApiResponse>({
         success: false,

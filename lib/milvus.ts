@@ -9,11 +9,18 @@ const MILVUS_CONFIG = {
 }
 
 export class MilvusService {
-  private client: MilvusClient
+  private client: MilvusClient | null = null
   private isConnected: boolean = false
 
   constructor() {
-    this.client = new MilvusClient(MILVUS_CONFIG)
+    // 延迟初始化，避免构建时加载 Milvus SDK
+  }
+
+  private initClient() {
+    if (!this.client) {
+      this.client = new MilvusClient(MILVUS_CONFIG)
+    }
+    return this.client
   }
 
   /**
@@ -21,7 +28,8 @@ export class MilvusService {
    */
   async connect(): Promise<boolean> {
     try {
-      const res = await this.client.checkHealth()
+      const client = this.initClient()
+      const res = await client.checkHealth()
       if (res.isHealthy) {
         this.isConnected = true
         console.log('✅ Milvus 连接成功')
@@ -40,8 +48,9 @@ export class MilvusService {
    */
   async createKnowledgeBaseCollection(collectionName: string, dimension: number = 1536): Promise<boolean> {
     try {
+      const client = this.initClient()
       // 检查集合是否已存在
-      const hasCollection = await this.client.hasCollection({
+      const hasCollection = await client.hasCollection({
         collection_name: collectionName,
       })
 
@@ -51,7 +60,7 @@ export class MilvusService {
       }
 
       // 创建集合
-      const createRes = await this.client.createCollection({
+      const createRes = await client.createCollection({
         collection_name: collectionName,
         fields: [
           {
@@ -95,7 +104,7 @@ export class MilvusService {
 
       if (createRes.error_code === ErrorCode.SUCCESS) {
         // 创建索引
-        const indexRes = await this.client.createIndex({
+        const indexRes = await client.createIndex({
           collection_name: collectionName,
           field_name: 'vector',
           index_type: 'IVF_FLAT',
@@ -105,7 +114,7 @@ export class MilvusService {
 
         if (indexRes.error_code === ErrorCode.SUCCESS) {
           // 加载集合到内存
-          await this.client.loadCollection({
+          await client.loadCollection({
             collection_name: collectionName,
           })
 
@@ -145,14 +154,15 @@ export class MilvusService {
         created_at: Date.now(),
       }))
 
-      const insertRes = await this.client.insert({
+      const client = this.initClient()
+      const insertRes = await client.insert({
         collection_name: collectionName,
         data: data,
       })
 
       if (insertRes.status.error_code === ErrorCode.SUCCESS) {
         // 刷新数据到持久化存储
-        await this.client.flush({
+        await client.flush({
           collection_names: [collectionName],
         })
 
@@ -184,7 +194,8 @@ export class MilvusService {
     score: number
   }[]> {
     try {
-      const searchRes = await this.client.search({
+      const client = this.initClient()
+      const searchRes = await client.search({
         collection_name: collectionName,
         vector: queryVector,
         filter: '', // 可以添加过滤条件
@@ -220,7 +231,8 @@ export class MilvusService {
    */
   async getCollectionStats(collectionName: string) {
     try {
-      const statsRes = await this.client.getCollectionStatistics({
+      const client = this.initClient()
+      const statsRes = await client.getCollectionStatistics({
         collection_name: collectionName,
       })
 
@@ -249,9 +261,10 @@ export class MilvusService {
    */
   async listCollections(): Promise<string[]> {
     try {
-      const res = await this.client.showCollections()
+      const client = this.initClient()
+      const res = await client.showCollections()
       if (res.status.error_code === ErrorCode.SUCCESS) {
-        return res.collection_names
+        return res.data?.map(collection => collection.name) || []
       }
       return []
     } catch (error) {
@@ -265,7 +278,8 @@ export class MilvusService {
    */
   async dropCollection(collectionName: string): Promise<boolean> {
     try {
-      const res = await this.client.dropCollection({
+      const client = this.initClient()
+      const res = await client.dropCollection({
         collection_name: collectionName,
       })
 
