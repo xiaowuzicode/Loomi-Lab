@@ -64,6 +64,7 @@ import {
 import { PageLayout } from '@/components/layout/PageLayout'
 import { Card } from '@/components/ui/Card'
 import { StatCard } from '@/components/ui/StatCard'
+import { useUsers } from '@/hooks/useUsers'
 
 const MotionBox = motion(Box)
 
@@ -83,128 +84,77 @@ interface User {
 }
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>([])
-  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [roleFilter, setRoleFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 12,
+    total: 0,
+    totalPages: 0
+  })
+  
+  const toast = useToast()
+  
   const { isOpen, onOpen, onClose } = useDisclosure()
   const {
     isOpen: isViewOpen,
     onOpen: onViewOpen,
     onClose: onViewClose,
   } = useDisclosure()
-  const toast = useToast()
+  
+  const {
+    users,
+    loading,
+    statsLoading,
+    stats,
+    fetchUsers,
+    fetchUserStats,
+    fetchUserById,
+    updateUser,
+    banUser,
+    unbanUser,
+    deleteUser,
+  } = useUsers()
 
   const USERS_PER_PAGE = 12
 
   const bgColor = useColorModeValue('white', 'gray.800')
   const borderColor = useColorModeValue('gray.200', 'gray.700')
 
-  // 模拟数据
+  // 加载用户数据
   useEffect(() => {
-    const fetchUsers = async () => {
-      setLoading(true)
-      await new Promise(resolve => setTimeout(resolve, 1000))
+    const loadData = async () => {
+      // 获取用户统计信息
+      await fetchUserStats()
       
-      const mockUsers: User[] = [
-        {
-          id: 'user_001',
-          name: '张三',
-          email: 'john@example.com',
-          phone: '+86 138****8888',
-          avatar: '',
-          status: 'active',
-          role: 'admin',
-          subscription: 'enterprise',
-          last_login: '2024-01-20T15:30:00Z',
-          created_at: '2024-01-15T10:30:00Z',
-          total_usage: 15420,
-          monthly_usage: 2340,
-        },
-        {
-          id: 'user_002',
-          name: '李四',
-          email: 'jane@example.com',
-          phone: '+86 139****9999',
-          avatar: '',
-          status: 'banned',
-          role: 'user',
-          subscription: 'premium',
-          last_login: '2024-01-18T12:20:00Z',
-          created_at: '2024-01-10T08:20:00Z',
-          total_usage: 8750,
-          monthly_usage: 1200,
-        },
-        {
-          id: 'user_003',
-          name: '王五',
-          email: 'bob@example.com',
-          phone: '+86 137****7777',
-          avatar: '',
-          status: 'active',
-          role: 'user',
-          subscription: 'free',
-          last_login: '2024-01-19T09:15:00Z',
-          created_at: '2024-01-05T14:45:00Z',
-          total_usage: 3200,
-          monthly_usage: 450,
-        },
-        {
-          id: 'user_004',
-          name: '赵六',
-          email: 'alice@example.com',
-          phone: '+86 136****6666',
-          avatar: '',
-          status: 'inactive',
-          role: 'moderator',
-          subscription: 'premium',
-          last_login: '2024-01-15T16:30:00Z',
-          created_at: '2024-01-01T12:00:00Z',
-          total_usage: 12500,
-          monthly_usage: 800,
-        },
-        // 添加更多用户数据以测试分页
-        ...Array.from({ length: 20 }, (_, i) => ({
-          id: `user_${String(i + 5).padStart(3, '0')}`,
-          name: `用户${i + 5}`,
-          email: `user${i + 5}@example.com`,
-          phone: `+86 135****${String(1000 + i).slice(-4)}`,
-          avatar: '',
-          status: ['active', 'inactive', 'banned'][i % 3] as User['status'],
-          role: ['user', 'moderator', 'admin'][i % 3] as User['role'],
-          subscription: ['free', 'premium', 'enterprise'][i % 3] as User['subscription'],
-          last_login: new Date(2024, 0, 20 - i, 10 + i % 12).toISOString(),
-          created_at: new Date(2024, 0, 1 + i, 8 + i % 16).toISOString(),
-          total_usage: Math.floor(Math.random() * 20000),
-          monthly_usage: Math.floor(Math.random() * 3000),
-        })),
-      ]
+      // 获取用户列表
+      const result = await fetchUsers({
+        page: currentPage,
+        limit: USERS_PER_PAGE,
+        search: searchTerm,
+        status: statusFilter,
+        role: roleFilter
+      })
       
-      setUsers(mockUsers)
-      setLoading(false)
+      setPagination(result.pagination)
     }
 
-    fetchUsers()
-  }, [])
+    loadData()
+    // 移除函数依赖项，避免无限循环
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, searchTerm, statusFilter, roleFilter])
 
-  // 过滤用户
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.phone.includes(searchTerm)
-    const matchesStatus = statusFilter === 'all' || user.status === statusFilter
-    const matchesRole = roleFilter === 'all' || user.role === roleFilter
-    
-    return matchesSearch && matchesStatus && matchesRole
-  })
+  // 搜索和筛选变化时重置到第一页
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, statusFilter, roleFilter])
 
-  // 分页
-  const totalPages = Math.ceil(filteredUsers.length / USERS_PER_PAGE)
-  const startIndex = (currentPage - 1) * USERS_PER_PAGE
-  const currentUsers = filteredUsers.slice(startIndex, startIndex + USERS_PER_PAGE)
+  // 使用服务端分页，不需要客户端过滤
+  const currentUsers = users
+  const totalPages = pagination.totalPages
 
   const handleCreateUser = () => {
     setSelectedUser(null)
@@ -216,31 +166,37 @@ export default function UsersPage() {
     onOpen()
   }
 
-  const handleViewUser = (user: User) => {
-    setSelectedUser(user)
+  const handleViewUser = async (user: User) => {
+    // 获取最新的用户信息
+    const latestUser = await fetchUserById(user.id)
+    setSelectedUser(latestUser || user)
     onViewOpen()
   }
 
-  const handleDeleteUser = (userId: string) => {
-    setUsers(prev => prev.filter(user => user.id !== userId))
-    toast({
-      title: '用户已删除',
-      status: 'success',
-      duration: 3000,
-      isClosable: true,
-    })
+  const handleDeleteUser = async (userId: string) => {
+    const success = await deleteUser(userId)
+    if (success) {
+      // 刷新用户列表
+      const result = await fetchUsers({
+        page: currentPage,
+        limit: USERS_PER_PAGE,
+        search: searchTerm,
+        status: statusFilter,
+        role: roleFilter
+      })
+      setPagination(result.pagination)
+    }
   }
 
-  const handleBanUser = (userId: string) => {
-    setUsers(prev => prev.map(user =>
-      user.id === userId ? { ...user, status: user.status === 'banned' ? 'active' : 'banned' } : user
-    ))
-    toast({
-      title: '用户状态已更新',
-      status: 'success',
-      duration: 3000,
-      isClosable: true,
-    })
+  const handleBanUser = async (userId: string) => {
+    const user = users.find(u => u.id === userId)
+    if (!user) return
+
+    if (user.status === 'banned') {
+      await unbanUser(userId)
+    } else {
+      await banUser(userId)
+    }
   }
 
   const getStatusBadge = (status: User['status']) => {
@@ -296,11 +252,11 @@ export default function UsersPage() {
     return new Intl.NumberFormat('zh-CN').format(num)
   }
 
-  // 计算统计数据
-  const totalUsers = users.length
-  const activeUsers = users.filter(u => u.status === 'active').length
-  const premiumUsers = users.filter(u => u.subscription !== 'free').length
-  const totalUsage = users.reduce((sum, user) => sum + user.total_usage, 0)
+  // 使用从 API 获取的统计数据
+  const totalUsers = stats.totalUsers
+  const activeUsers = stats.activeUsers
+  const newUsersThisMonth = stats.newUsersThisMonth
+  const dailyNewUsers = stats.dailyNewUsers
 
   return (
     <PageLayout>
@@ -338,28 +294,28 @@ export default function UsersPage() {
               value={totalUsers}
               icon={RiUserLine}
               iconColor="blue.400"
-              loading={loading}
+              loading={statsLoading}
             />
             <StatCard
               title="活跃用户"
               value={activeUsers}
               icon={RiShieldUserLine}
               iconColor="green.400"
-              loading={loading}
+              loading={statsLoading}
             />
             <StatCard
-              title="付费用户"
-              value={premiumUsers}
+              title="本月新增"
+              value={newUsersThisMonth}
               icon={RiUserLine}
               iconColor="purple.400"
-              loading={loading}
+              loading={statsLoading}
             />
             <StatCard
-              title="总使用量"
-              value={formatNumber(totalUsage)}
+              title="今日新增"
+              value={dailyNewUsers}
               icon={RiUserLine}
               iconColor="orange.400"
-              loading={loading}
+              loading={statsLoading}
             />
           </Grid>
         </MotionBox>
@@ -439,7 +395,7 @@ export default function UsersPage() {
                 <Skeleton key={i} height="280px" borderRadius="xl" />
               ))}
             </Grid>
-          ) : filteredUsers.length === 0 ? (
+          ) : currentUsers.length === 0 ? (
             <Card>
               <Alert status="info">
                 <AlertIcon />
@@ -571,8 +527,8 @@ export default function UsersPage() {
                 <Card>
                   <HStack justify="space-between" align="center">
                     <Text fontSize="sm" color="gray.500">
-                      显示 {startIndex + 1}-{Math.min(startIndex + USERS_PER_PAGE, filteredUsers.length)} 
-                      ，共 {filteredUsers.length} 个用户
+                      显示 {((pagination.page - 1) * pagination.limit) + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)} 
+                      ，共 {pagination.total} 个用户，总共 {pagination.totalPages} 页
                     </Text>
                     
                     <HStack spacing={2}>
