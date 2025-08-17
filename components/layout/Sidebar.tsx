@@ -13,6 +13,7 @@ import {
 } from '@chakra-ui/react'
 // import { motion, AnimatePresence } from 'framer-motion' // 暂时移除动画
 import { usePathname } from 'next/navigation'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
   RiDashboardLine,
@@ -37,7 +38,13 @@ interface NavItem {
   color?: string
 }
 
-const navItems: NavItem[] = [
+// 格式化数字显示 - 根据用户要求显示实际数字而不是K简化
+const formatUserCount = (count: number): string => {
+  return count.toString()
+}
+
+// 生成导航项的函数，支持动态badge
+const getNavItems = (userCount: number): NavItem[] => [
   {
     label: '统计分析',
     href: '/dashboard',
@@ -48,7 +55,7 @@ const navItems: NavItem[] = [
     label: '用户管理',
     href: '/users',
     icon: RiUser3Line,
-    badge: '1.2K',
+    badge: userCount > 0 ? formatUserCount(userCount) : undefined,
     color: 'green.400',
   },
   {
@@ -98,6 +105,30 @@ export function Sidebar({ isCollapsed = false }: SidebarProps) {
   const pathname = usePathname()
   const bgColor = useColorModeValue('white', 'gray.900')
   const borderColor = useColorModeValue('gray.200', 'gray.700')
+  
+  // 用户数量状态
+  const [userCount, setUserCount] = useState(0)
+  
+  // 获取用户统计数据
+  useEffect(() => {
+    const fetchUserStats = async () => {
+      try {
+        const response = await fetch('/api/users?action=stats')
+        const result = await response.json()
+        
+        if (result.success && result.data) {
+          setUserCount(result.data.totalUsers || 0)
+        }
+      } catch (error) {
+        console.error('获取用户统计失败:', error)
+      }
+    }
+    
+    fetchUserStats()
+  }, [])
+  
+  // 动态生成导航项
+  const navItems = getNavItems(userCount)
 
   return (
     <Box
