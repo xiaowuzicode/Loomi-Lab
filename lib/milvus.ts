@@ -1,12 +1,18 @@
 import { MilvusClient, DataType, ErrorCode } from '@zilliz/milvus2-sdk-node'
 
-// Milvus 连接配置
+// Milvus 连接配置 - 本地Docker部署
 const MILVUS_CONFIG = {
-  address: process.env.MILVUS_ENDPOINT || 'https://in03-224856a9de916a8.api.gcp-us-west1.zillizcloud.com',
-  username: process.env.MILVUS_USERNAME || 'db_224856a9de916a8',
-  password: process.env.MILVUS_PASSWORD || 'Cg4{%Flpa,++a~<w',
+  address: process.env.MILVUS_ENDPOINT || 'http://127.0.0.1:19530',
+  // 本地 Milvus 通常不需要认证，但可以配置token
+  ...(process.env.MILVUS_USERNAME && process.env.MILVUS_PASSWORD ? {
+    token: `${process.env.MILVUS_USERNAME}:${process.env.MILVUS_PASSWORD}`,
+  } : {}),
+  // 指定数据库
   database: process.env.MILVUS_DATABASE || 'default',
 }
+
+// Milvus 功能开关 - 可以通过环境变量禁用
+const MILVUS_ENABLED = process.env.MILVUS_ENABLED !== 'false'
 
 export class MilvusService {
   private client: MilvusClient | null = null
@@ -27,6 +33,11 @@ export class MilvusService {
    * 连接到 Milvus 数据库
    */
   async connect(): Promise<boolean> {
+    if (!MILVUS_ENABLED) {
+      console.log('⚠️ Milvus 功能已禁用')
+      return false
+    }
+
     try {
       const client = this.initClient()
       const res = await client.checkHealth()
@@ -37,8 +48,14 @@ export class MilvusService {
       }
       console.error('❌ Milvus 健康检查失败')
       return false
-    } catch (error) {
-      console.error('❌ Milvus 连接失败:', error)
+    } catch (error: any) {
+      const errorMsg = error?.details || error?.message || error
+      if (errorMsg.includes('cluster does not exist') || errorMsg.includes('UNAUTHENTICATED')) {
+        console.warn('⚠️ Milvus 集群不可用 - 功能将被禁用:', errorMsg)
+      } else {
+        console.error('❌ Milvus 连接失败:', errorMsg)
+      }
+      this.isConnected = false
       return false
     }
   }
@@ -92,7 +109,7 @@ export class MilvusService {
             name: 'metadata',
             description: '文档元数据 JSON',
             data_type: DataType.VarChar,
-            max_length: 2000,
+            max_length: 65535, // 增加到最大varchar长度
           },
           {
             name: 'created_at',
@@ -297,6 +314,130 @@ export class MilvusService {
   }
 
   /**
+   * 删除指定ID的记录
+   */
+  async deleteEntity(collectionName: string, ids: string[]): Promise<boolean> {
+    try {
+      const client = this.initClient()
+      
+      // 删除指定ID的实体
+      const res = await client.deleteEntities({
+        collection_name: collectionName,
+        ids: ids
+      })
+
+      if (res.error_code === ErrorCode.SUCCESS) {
+        console.log(`✅ 成功删除 ${ids.length} 条记录从集合 ${collectionName}`)
+        return true
+      }
+
+      console.error(`❌ 删除记录失败: ${res.reason}`)
+      return false
+    } catch (error) {
+      console.error('❌ 删除记录异常:', error)
+      return false
+    }
+  }
+
+  /**
+   * 根据表达式删除记录
+   */
+  async deleteByExpression(collectionName: string, expression: string): Promise<boolean> {
+    try {
+      const client = this.initClient()
+      
+      // 使用表达式删除实体
+      const res = await client.deleteEntities({
+        collection_name: collectionName,
+        expr: expression
+      })
+
+      if (res.error_code === ErrorCode.SUCCESS) {
+        console.log(`✅ 成功根据条件删除记录: ${expression}`)
+        return true
+      }
+
+      console.error(`❌ 条件删除失败: ${res.reason}`)
+      return false
+    } catch (error) {
+      console.error('❌ 条件删除异常:', error)
+      return false
+    }
+  }
+
+  /**
+   * 清空集合中的所有数据（保留集合结构）
+   */
+  async clearCollection(collectionName: string): Promise<boolean> {
+    try {
+      // 获取集合统计信息来确认是否有数据
+      const stats = await this.getCollectionStats(collectionName)
+      
+      if (stats.row_count === 0) {
+        console.log(`✅ 集合 ${collectionName} 已经是空的`)
+        return true
+      }
+
+      // 方法1: 尝试使用通用的删除表达式
+      // 对于字符串主键，尝试 id like "%"（匹配所有记录）
+      let success = await this.deleteByExpression(collectionName, 'id like "%"')
+      
+      if (!success) {
+        console.log('⚠️ 通用删除表达式失败，尝试 drop-recreate 方法')
+        
+        // 方法2: Drop 然后重新创建集合（更可靠）
+        success = await this.recreateCollection(collectionName)
+      }
+      
+      if (success) {
+        // 验证清空是否成功
+        const afterStats = await this.getCollectionStats(collectionName)
+        if (afterStats.row_count === 0) {
+          console.log(`✅ 集合 ${collectionName} 已成功清空`)
+          return true
+        } else {
+          console.error(`❌ 清空验证失败，集合仍有 ${afterStats.row_count} 条记录`)
+          return false
+        }
+      }
+      
+      return false
+    } catch (error) {
+      console.error('❌ 清空集合异常:', error)
+      return false
+    }
+  }
+
+  /**
+   * 重新创建集合（drop + create）
+   */
+  private async recreateCollection(collectionName: string): Promise<boolean> {
+    try {
+      console.log(`🔄 开始重新创建集合: ${collectionName}`)
+      
+      // 1. 删除原集合
+      const dropSuccess = await this.dropCollection(collectionName)
+      if (!dropSuccess) {
+        console.error('❌ 删除原集合失败')
+        return false
+      }
+      
+      // 2. 重新创建集合（使用默认参数）
+      const createSuccess = await this.createKnowledgeBaseCollection(collectionName, 1536)
+      if (createSuccess) {
+        console.log(`✅ 集合 ${collectionName} 重新创建成功`)
+        return true
+      } else {
+        console.error('❌ 重新创建集合失败')
+        return false
+      }
+    } catch (error) {
+      console.error('❌ 重新创建集合异常:', error)
+      return false
+    }
+  }
+
+  /**
    * 关闭连接
    */
   async disconnect(): Promise<void> {
@@ -317,23 +458,57 @@ export class MilvusService {
   }
 }
 
+/**
+ * 生成模拟向量（fallback方案）
+ */
+function generateMockEmbedding(text: string): number[] {
+  const dimension = 1536
+  const vector = Array.from({ length: dimension }, () => Math.random() - 0.5)
+  
+  // 归一化向量
+  const norm = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0))
+  return vector.map(val => val / norm)
+}
+
 // 创建全局 Milvus 服务实例
 export const milvusService = new MilvusService()
 
 // 文档处理工具类
 export class DocumentProcessor {
   /**
-   * 模拟文本向量化（实际项目中应该调用 OpenAI Embedding API）
+   * 真实文本向量化（使用OpenAI Embedding API）
    */
   static async generateEmbedding(text: string): Promise<number[]> {
-    // 这里应该调用真实的 Embedding API，比如 OpenAI
-    // 目前返回模拟的向量数据
-    const dimension = 1536 // OpenAI text-embedding-ada-002 的维度
-    const vector = Array.from({ length: dimension }, () => Math.random() - 0.5)
-    
-    // 归一化向量
-    const norm = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0))
-    return vector.map(val => val / norm)
+    try {
+      if (!text || text.trim().length === 0) {
+        return new Array(1536).fill(0)
+      }
+
+      // 动态导入OpenAI（避免构建问题）
+      const { OpenAI } = await import('openai')
+      
+      // 检查环境变量
+      if (!process.env.OPENAI_API_KEY) {
+        console.warn('⚠️ 未配置OpenAI API Key，使用模拟向量')
+        return generateMockEmbedding(text)
+      }
+
+      const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+        baseURL: process.env.OPENAI_BASE_URL,
+      })
+
+      const response = await openai.embeddings.create({
+        model: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-ada-002',
+        input: text.substring(0, 8000) // 限制文本长度
+      })
+
+      return response.data[0].embedding
+
+    } catch (error) {
+      console.error('❌ OpenAI embedding失败，使用模拟向量:', error)
+      return generateMockEmbedding(text)
+    }
   }
 
   /**

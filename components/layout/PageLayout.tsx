@@ -2,11 +2,11 @@
 
 import { Box, Flex, useColorModeValue } from '@chakra-ui/react'
 import { useState } from 'react'
-import { motion } from 'framer-motion'
+// import { motion } from 'framer-motion' // 暂时移除动画
 import { Header } from './Header'
 import { Sidebar } from './Sidebar'
 
-const MotionBox = motion(Box)
+// const MotionBox = Box // 暂时移除动画
 
 interface PageLayoutProps {
   children: React.ReactNode
@@ -29,10 +29,9 @@ export function PageLayout({ children }: PageLayoutProps) {
       <Sidebar isCollapsed={isSidebarCollapsed} />
 
       {/* Main content */}
-      <MotionBox
+      <Box
         flex={1}
         ml={isSidebarCollapsed ? '16' : '64'}
-        transition={{ duration: 0.3 }}
         display="flex"
         flexDirection="column"
       >
@@ -40,16 +39,13 @@ export function PageLayout({ children }: PageLayoutProps) {
         <Header onToggleSidebar={handleToggleSidebar} />
 
         {/* Page content */}
-        <MotionBox
+        <Box
           flex={1}
           p={6}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
         >
           {children}
-        </MotionBox>
-      </MotionBox>
+        </Box>
+      </Box>
     </Flex>
   )
 }

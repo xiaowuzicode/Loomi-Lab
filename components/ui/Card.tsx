@@ -1,9 +1,9 @@
 'use client'
 
 import { Box, BoxProps, useColorModeValue } from '@chakra-ui/react'
-import { motion } from 'framer-motion'
+// import { motion } from 'framer-motion' // 暂时移除动画
 
-const MotionBox = motion(Box)
+// const MotionBox = Box // 暂时移除动画
 
 interface CardProps extends BoxProps {
   children: React.ReactNode
@@ -41,18 +41,13 @@ export function Card({
   }
 
   return (
-    <MotionBox
+    <Box
       borderRadius="xl"
       p={6}
-      transition={{ duration: 0.2 }}
-      whileHover={hover ? { 
-        y: -2, 
-        shadow: `0 8px 25px ${shadowColor}` 
-      } : {}}
       {...variants[variant]}
       {...props}
     >
       {children}
-    </MotionBox>
+    </Box>
   )
 }

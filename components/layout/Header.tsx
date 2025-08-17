@@ -20,7 +20,7 @@ import {
   InputGroup,
   InputLeftElement,
 } from '@chakra-ui/react'
-import { motion } from 'framer-motion'
+// import { motion } from 'framer-motion' // 暂时移除动画
 import {
   RiSearchLine,
   RiBellLine,
@@ -35,8 +35,8 @@ import {
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 
-const MotionBox = motion(Box)
-const MotionFlex = motion(Flex)
+// const MotionBox = Box // 暂时移除动画
+// const MotionFlex = Flex // 暂时移除动画
 
 interface HeaderProps {
   onToggleSidebar?: () => void
@@ -72,7 +72,7 @@ export function Header({
   const unreadCount = notifications.filter(n => n.unread).length
 
   return (
-    <MotionBox
+    <Box
       as="header"
       bg={bgColor}
       borderBottom="1px"
@@ -83,9 +83,6 @@ export function Header({
       top={0}
       zIndex={5}
       backdropFilter="blur(10px)"
-      initial={{ opacity: 0, y: -20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
     >
       <Flex justify="space-between" align="center">
         {/* Left section */}
@@ -194,11 +191,9 @@ export function Header({
           {/* User menu */}
           <Menu>
             <MenuButton>
-              <MotionFlex
+              <Flex
                 align="center"
                 cursor="pointer"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
               >
                 <HStack spacing={3}>
                   <VStack spacing={0} align="end" display={{ base: 'none', md: 'flex' }}>
@@ -217,7 +212,7 @@ export function Header({
                     color="white"
                   />
                 </HStack>
-              </MotionFlex>
+              </Flex>
             </MenuButton>
             <MenuList>
               <MenuItem 
@@ -244,6 +239,6 @@ export function Header({
           </Menu>
         </HStack>
       </Flex>
-    </MotionBox>
+    </Box>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useToast } from '@chakra-ui/react'
 import type { KnowledgeBase } from '@/types'
 
@@ -36,7 +36,7 @@ export function useMilvus() {
   const toast = useToast()
 
   // 获取所有知识库
-  const fetchKnowledgeBases = async () => {
+  const fetchKnowledgeBases = useCallback(async () => {
     setLoading(true)
     setError(null)
     
@@ -77,7 +77,7 @@ export function useMilvus() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
 
   // 检查 Milvus 连接状态
   const checkHealth = async () => {
@@ -93,7 +93,7 @@ export function useMilvus() {
   }
 
   // 创建新的知识库
-  const createKnowledgeBase = async (name: string, dimension: number = 1536) => {
+  const createKnowledgeBase = useCallback(async (name: string, dimension: number = 1536) => {
     setLoading(true)
     setError(null)
     
@@ -137,7 +137,7 @@ export function useMilvus() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
 
   // 添加文档到知识库
   const addDocument = async (
@@ -194,7 +194,7 @@ export function useMilvus() {
   }
 
   // RAG 查询
-  const ragQuery = async (
+  const ragQuery = useCallback(async (
     collectionName: string,
     question: string,
     topK: number = 3,
@@ -238,15 +238,15 @@ export function useMilvus() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
 
-  // 删除知识库
-  const deleteKnowledgeBase = async (collectionName: string) => {
+  // 删除知识库（完整删除）
+  const deleteKnowledgeBase = useCallback(async (collectionName: string) => {
     setLoading(true)
     setError(null)
     
     try {
-      const response = await fetch(`/api/knowledge-base?collection=${encodeURIComponent(collectionName)}`, {
+      const response = await fetch(`/api/knowledge-base?collection=${encodeURIComponent(collectionName)}&action=drop`, {
         method: 'DELETE',
       })
       
@@ -281,7 +281,138 @@ export function useMilvus() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
+
+  // 清空知识库数据（保留结构）
+  const clearKnowledgeBase = useCallback(async (collectionName: string) => {
+    setLoading(true)
+    setError(null)
+    
+    try {
+      const response = await fetch(`/api/knowledge-base?collection=${encodeURIComponent(collectionName)}&action=clear`, {
+        method: 'DELETE',
+      })
+      
+      const result: ApiResponse<any> = await response.json()
+      
+      if (result.success) {
+        toast({
+          title: '知识库清空成功',
+          description: `知识库 "${collectionName}" 的所有数据已清空`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        })
+        
+        // 刷新知识库列表
+        await fetchKnowledgeBases()
+        return true
+      } else {
+        throw new Error(result.error || '清空知识库失败')
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '未知错误'
+      setError(errorMessage)
+      toast({
+        title: '清空知识库失败',
+        description: errorMessage,
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return false
+    } finally {
+      setLoading(false)
+    }
+  }, [toast])
+
+  // 删除指定ID的记录
+  const deleteEntities = useCallback(async (collectionName: string, ids: string[]) => {
+    setLoading(true)
+    setError(null)
+    
+    try {
+      const response = await fetch(`/api/knowledge-base?collection=${encodeURIComponent(collectionName)}&action=entities`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ids })
+      })
+      
+      const result: ApiResponse<any> = await response.json()
+      
+      if (result.success) {
+        toast({
+          title: '记录删除成功',
+          description: `成功删除 ${ids.length} 条记录`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        })
+        return true
+      } else {
+        throw new Error(result.error || '删除记录失败')
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '未知错误'
+      setError(errorMessage)
+      toast({
+        title: '删除记录失败',
+        description: errorMessage,
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return false
+    } finally {
+      setLoading(false)
+    }
+  }, [toast])
+
+  // 根据条件删除记录
+  const deleteByCondition = useCallback(async (collectionName: string, expression: string) => {
+    setLoading(true)
+    setError(null)
+    
+    try {
+      const response = await fetch(`/api/knowledge-base?collection=${encodeURIComponent(collectionName)}&action=expression`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ expression })
+      })
+      
+      const result: ApiResponse<any> = await response.json()
+      
+      if (result.success) {
+        toast({
+          title: '条件删除成功',
+          description: `成功删除符合条件的记录`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        })
+        return true
+      } else {
+        throw new Error(result.error || '条件删除失败')
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '未知错误'
+      setError(errorMessage)
+      toast({
+        title: '条件删除失败',
+        description: errorMessage,
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return false
+    } finally {
+      setLoading(false)
+    }
+  }, [toast])
 
   // 获取知识库统计信息
   const getKnowledgeBaseStats = async (collectionName: string) => {
@@ -312,6 +443,157 @@ export function useMilvus() {
     }
   }
 
+  // 小红书数据导入
+  const importXiaohongshuData = async (
+    collectionName: string,
+    dataType: 'csv' | 'json',
+    data: string
+  ): Promise<{ success: boolean; importedCount?: number; error?: string }> => {
+    setLoading(true)
+    setError(null)
+    
+    try {
+      const response = await fetch('/api/xiaohongshu-import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          collectionName,
+          dataType,
+          data,
+        }),
+      })
+      
+      const result: ApiResponse<any> = await response.json()
+      
+      if (result.success) {
+        const importedCount = result.data?.importedCount || 0
+        
+        toast({
+          title: '小红书数据导入成功',
+          description: `成功导入 ${importedCount} 条数据到 "${collectionName}"`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        })
+        
+        // 刷新知识库列表
+        await fetchKnowledgeBases()
+        return { success: true, importedCount }
+      } else {
+        throw new Error(result.error || '导入失败')
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '未知错误'
+      setError(errorMessage)
+      toast({
+        title: '小红书数据导入失败',
+        description: errorMessage,
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return { success: false, error: errorMessage }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ANN 相似性搜索
+  const searchSimilarContent = async (
+    collectionName: string,
+    query: string,
+    searchType: 'title' | 'content' | 'both' = 'both',
+    topK: number = 5,
+    minScore: number = 0.3
+  ) => {
+    setLoading(true)
+    setError(null)
+    
+    try {
+      const response = await fetch('/api/xiaohongshu-search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          collectionName,
+          query,
+          searchType,
+          topK,
+          minScore,
+        }),
+      })
+      
+      const result: ApiResponse<any[]> = await response.json()
+      
+      if (result.success && result.data) {
+        return result.data
+      } else {
+        throw new Error(result.error || '搜索失败')
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '未知错误'
+      setError(errorMessage)
+      toast({
+        title: 'ANN搜索失败',
+        description: errorMessage,
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return []
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 初始化小红书集合
+  const initializeXiaohongshuCollection = async (collectionName?: string) => {
+    setLoading(true)
+    setError(null)
+    
+    try {
+      const response = await fetch('/api/xiaohongshu-init', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ collectionName }),
+      })
+      
+      const result: ApiResponse<any> = await response.json()
+      
+      if (result.success) {
+        toast({
+          title: '小红书集合初始化成功',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        })
+        
+        await fetchKnowledgeBases()
+        return true
+      } else {
+        throw new Error(result.error || '初始化失败')
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '未知错误'
+      setError(errorMessage)
+      toast({
+        title: '初始化失败',
+        description: errorMessage,
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return false
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return {
     knowledgeBases,
     loading,
@@ -322,7 +604,14 @@ export function useMilvus() {
     addDocument,
     ragQuery,
     deleteKnowledgeBase,
+    clearKnowledgeBase,
+    deleteEntities,
+    deleteByCondition,
     getKnowledgeBaseStats,
+    // 新增的小红书相关功能
+    importXiaohongshuData,
+    searchSimilarContent,
+    initializeXiaohongshuCollection,
   }
 }
 

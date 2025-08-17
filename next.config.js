@@ -37,6 +37,9 @@ const nextConfig = {
     unoptimized: process.env.NODE_ENV === 'development',
   },
 
+  // 开发环境跨域配置
+  allowedDevOrigins: ['127.0.0.1'],
+
   // 编译配置
   typescript: {
     ignoreBuildErrors: false,

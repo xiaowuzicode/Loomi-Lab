@@ -11,7 +11,7 @@ import {
   Badge,
   Divider,
 } from '@chakra-ui/react'
-import { motion, AnimatePresence } from 'framer-motion'
+// import { motion, AnimatePresence } from 'framer-motion' // 暂时移除动画
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -26,8 +26,8 @@ import {
   RiSparklingFill,
 } from 'react-icons/ri'
 
-const MotionBox = motion(Box)
-const MotionHStack = motion(HStack)
+// const Box = Box // 暂时移除动画
+// const HStack = HStack // 暂时移除动画
 
 interface NavItem {
   label: string
@@ -59,7 +59,7 @@ const navItems: NavItem[] = [
   },
   {
     label: '知识库管理',
-    href: '/knowledge-base',
+    href: '/knowledge-base-v2',
     icon: RiBrainLine,
     color: 'purple.400',
   },
@@ -100,7 +100,7 @@ export function Sidebar({ isCollapsed = false }: SidebarProps) {
   const borderColor = useColorModeValue('gray.200', 'gray.700')
 
   return (
-    <MotionBox
+    <Box
       as="aside"
       w={isCollapsed ? '16' : '64'}
       h="100vh"
@@ -111,23 +111,17 @@ export function Sidebar({ isCollapsed = false }: SidebarProps) {
       left={0}
       top={0}
       zIndex={10}
-      transition={{ duration: 0.3 }}
       overflow="hidden"
     >
       <VStack spacing={0} align="stretch" h="full">
         {/* Logo */}
-        <MotionBox
+        <Box
           p={6}
           borderBottom="1px"
           borderColor={borderColor}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.1 }}
         >
           <HStack spacing={3}>
-            <MotionBox
-              whileHover={{ rotate: 360 }}
-              transition={{ duration: 0.6 }}
+            <Box
             >
               <Icon
                 as={RiSparklingFill}
@@ -135,14 +129,10 @@ export function Sidebar({ isCollapsed = false }: SidebarProps) {
                 color="primary.500"
                 filter="drop-shadow(0 0 10px currentColor)"
               />
-            </MotionBox>
-            <AnimatePresence>
+            </Box>
+            
               {!isCollapsed && (
-                <MotionBox
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.2 }}
+                <Box
                 >
                   <Text
                     fontSize="xl"
@@ -152,11 +142,11 @@ export function Sidebar({ isCollapsed = false }: SidebarProps) {
                   >
                     Loomi-Lab
                   </Text>
-                </MotionBox>
+                </Box>
               )}
-            </AnimatePresence>
+            
           </HStack>
-        </MotionBox>
+        </Box>
 
         {/* Navigation */}
         <VStack spacing={2} p={4} flex={1} align="stretch">
@@ -167,25 +157,20 @@ export function Sidebar({ isCollapsed = false }: SidebarProps) {
             const activeBg = useColorModeValue('primary.50', 'primary.900')
 
             return (
-              <MotionBox
+              <Box
                 key={item.href}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
               >
                 <Tooltip
                   label={item.label}
                   placement="right"
                   isDisabled={!isCollapsed}
                 >
-                  <MotionBox
+                  <Box
                     as={Link}
                     href={item.href}
                     display="block"
-                    whileHover={{ x: 4 }}
-                    whileTap={{ scale: 0.95 }}
                   >
-                    <MotionHStack
+                    <HStack
                       spacing={3}
                       p={3}
                       borderRadius="lg"
@@ -200,7 +185,7 @@ export function Sidebar({ isCollapsed = false }: SidebarProps) {
                     >
                       {/* Active indicator */}
                       {isActive && (
-                        <MotionBox
+                        <Box
                           position="absolute"
                           left={0}
                           top={0}
@@ -208,7 +193,7 @@ export function Sidebar({ isCollapsed = false }: SidebarProps) {
                           w="3px"
                           bg={activeColor}
                           borderRadius="full"
-                          layoutId="activeIndicator"
+
                         />
                       )}
 
@@ -219,14 +204,10 @@ export function Sidebar({ isCollapsed = false }: SidebarProps) {
                         filter={isActive ? 'drop-shadow(0 0 8px currentColor)' : 'none'}
                       />
 
-                      <AnimatePresence>
+                      
                         {!isCollapsed && (
-                          <MotionBox
+                          <Box
                             flex={1}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ duration: 0.2 }}
                           >
                             <HStack justify="space-between" w="full">
                               <Text
@@ -245,42 +226,35 @@ export function Sidebar({ isCollapsed = false }: SidebarProps) {
                                 </Badge>
                               )}
                             </HStack>
-                          </MotionBox>
+                          </Box>
                         )}
-                      </AnimatePresence>
-                    </MotionHStack>
-                  </MotionBox>
+                      
+                    </HStack>
+                  </Box>
                 </Tooltip>
-              </MotionBox>
+              </Box>
             )
           })}
         </VStack>
 
         {/* Footer */}
-        <MotionBox
+        <Box
           p={4}
           borderTop="1px"
           borderColor={borderColor}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
         >
-          <AnimatePresence>
+          
             {!isCollapsed && (
-              <MotionBox
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
-                transition={{ duration: 0.2 }}
+              <Box
               >
                 <Text fontSize="xs" color="gray.500" textAlign="center">
                   © 2024 BlueFocus Team
                 </Text>
-              </MotionBox>
+              </Box>
             )}
-          </AnimatePresence>
-        </MotionBox>
+          
+        </Box>
       </VStack>
-    </MotionBox>
+    </Box>
   )
 }

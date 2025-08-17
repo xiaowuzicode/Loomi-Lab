@@ -151,6 +151,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
+    const action = searchParams.get('action') || 'drop' // 默认删除整个集合
     const collectionName = searchParams.get('collection')
 
     if (!collectionName) {
@@ -161,15 +162,70 @@ export async function DELETE(request: NextRequest) {
     }
 
     await milvusService.connect()
-    const success = await milvusService.dropCollection(collectionName)
+    
+    let success = false
+    let message = ''
+
+    switch (action) {
+      case 'drop':
+        // 删除整个集合
+        success = await milvusService.dropCollection(collectionName)
+        message = success ? '知识库删除成功' : '知识库删除失败'
+        break
+        
+      case 'clear':
+        // 清空集合数据但保留结构
+        success = await milvusService.clearCollection(collectionName)
+        message = success ? '知识库清空成功' : '知识库清空失败'
+        break
+        
+      case 'entities':
+        // 删除指定ID的记录
+        const body = await request.json()
+        const { ids } = body
+        
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+          return NextResponse.json({
+            success: false,
+            error: '请提供要删除的记录ID列表'
+          }, { status: 400 })
+        }
+        
+        success = await milvusService.deleteEntity(collectionName, ids)
+        message = success ? `成功删除 ${ids.length} 条记录` : '删除记录失败'
+        break
+        
+      case 'expression':
+        // 根据表达式删除记录
+        const bodyExpr = await request.json()
+        const { expression } = bodyExpr
+        
+        if (!expression) {
+          return NextResponse.json({
+            success: false,
+            error: '请提供删除条件表达式'
+          }, { status: 400 })
+        }
+        
+        success = await milvusService.deleteByExpression(collectionName, expression)
+        message = success ? '条件删除成功' : '条件删除失败'
+        break
+        
+      default:
+        return NextResponse.json({
+          success: false,
+          error: '不支持的删除操作类型'
+        }, { status: 400 })
+    }
     
     return NextResponse.json({
       success,
-      message: success ? '知识库删除成功' : '知识库删除失败'
+      message,
+      data: { action, collection: collectionName }
     })
 
   } catch (error) {
-    console.error('Knowledge Base API Error:', error)
+    console.error('Knowledge Base Delete API Error:', error)
     return NextResponse.json({
       success: false,
       error: '服务器内部错误'
