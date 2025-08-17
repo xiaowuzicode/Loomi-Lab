@@ -32,6 +32,7 @@ interface AnimatedChartProps {
   height?: number
   title?: string
   loading?: boolean
+  yAxisFormat?: 'default' | 'token' // 新增Y轴格式化选项
 }
 
 export function AnimatedChart({
@@ -41,21 +42,44 @@ export function AnimatedChart({
   height = 300,
   title,
   loading = false,
+  yAxisFormat = 'default',
 }: AnimatedChartProps) {
   const defaultColor = useColorModeValue('#3b82f6', '#60a5fa')
   const finalColor = color || defaultColor
   const gridColor = useColorModeValue('#f3f4f6', '#374151')
   const textColor = useColorModeValue('#6b7280', '#9ca3af')
+  
+  // Token数据转换：将原始Token数量转换为万单位
+  const processedData = yAxisFormat === 'token' 
+    ? data.map(item => ({
+        ...item,
+        value: Math.round(item.value / 10000 * 10) / 10, // 转换为万单位，保留1位小数
+        originalValue: item.value // 保留原始值用于tooltip显示
+      }))
+    : data
+    
+  // Y轴格式化函数
+  const formatYAxisTick = (value: number) => {
+    if (yAxisFormat === 'token') {
+      return `${value.toFixed(1)}万`
+    }
+    return value.toLocaleString()
+  }
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
+      const value = payload[0].payload.originalValue || payload[0].value
+      const displayValue = yAxisFormat === 'token' 
+        ? `${Math.round(value / 10000 * 10) / 10}万` 
+        : value.toLocaleString()
+      
       return (
         <Card variant="glass" p={3}>
           <Box fontSize="sm" color={textColor} mb={1}>
             {label}
           </Box>
           <Box fontSize="lg" fontWeight="bold" color={finalColor}>
-            {payload[0].value.toLocaleString()}
+            {displayValue}
           </Box>
         </Card>
       )
@@ -65,7 +89,7 @@ export function AnimatedChart({
 
   const renderChart = () => {
     const commonProps = {
-      data,
+      data: processedData,
       margin: { top: 10, right: 30, left: 0, bottom: 0 },
     }
 
@@ -84,6 +108,7 @@ export function AnimatedChart({
               axisLine={false}
               tickLine={false}
               tick={{ fill: textColor, fontSize: 12 }}
+              tickFormatter={formatYAxisTick}
             />
             <Tooltip content={<CustomTooltip />} />
             <Line
@@ -111,6 +136,7 @@ export function AnimatedChart({
               axisLine={false}
               tickLine={false}
               tick={{ fill: textColor, fontSize: 12 }}
+              tickFormatter={formatYAxisTick}
             />
             <Tooltip content={<CustomTooltip />} />
             <Bar
@@ -136,6 +162,7 @@ export function AnimatedChart({
               axisLine={false}
               tickLine={false}
               tick={{ fill: textColor, fontSize: 12 }}
+              tickFormatter={formatYAxisTick}
             />
             <Tooltip content={<CustomTooltip />} />
             <Area

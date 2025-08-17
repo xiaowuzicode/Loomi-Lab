@@ -467,6 +467,7 @@ export default function DashboardPage() {
               title="每日 Token 消耗"
               color="#f97316"
               height={350}
+              yAxisFormat="token"
             />
             <AnimatedChart
               data={convertChartData(data.monthly_token_chart.labels, data.monthly_token_chart.token_counts)}
@@ -474,6 +475,7 @@ export default function DashboardPage() {
               title="月度 Token 消耗"
               color="#ec4899"
               height={350}
+              yAxisFormat="token"
             />
           </SimpleGrid>
         </VStack>
