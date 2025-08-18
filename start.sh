@@ -21,6 +21,7 @@ fi
 PORT=${PORT:-3000}
 LOG_FILE="app.log"
 PID_FILE="loomi.pid"
+PORT_FILE="loomi.port"
 
 # 检查端口占用（兼容 lsof/ss/netstat）
 port_in_use() {
@@ -70,4 +71,25 @@ echo ""
 # 启动 Next.js 开发服务器（绑定 0.0.0.0，并后台运行）
 nohup npm run dev -- -H 0.0.0.0 -p "$PORT" >> "$LOG_FILE" 2>&1 &
 echo $! > "$PID_FILE"
+echo "$PORT" > "$PORT_FILE"
 echo "✅ 已后台启动，PID: $(cat "$PID_FILE")"
+
+# 等待端口就绪（最多 30s）
+echo "⏳ 等待服务在端口 $PORT 上监听..."
+for i in {1..60}; do
+    if command -v ss >/dev/null 2>&1; then
+        if ss -ltn | awk '{print $4}' | grep -q ":$PORT$"; then
+            echo "✅ 服务已在 0.0.0.0:$PORT 监听"
+            break
+        fi
+    elif command -v lsof >/dev/null 2>&1; then
+        if lsof -nPi :"$PORT" -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo "✅ 服务已在 0.0.0.0:$PORT 监听"
+            break
+        fi
+    fi
+    sleep 0.5
+    if [ "$i" -eq 60 ]; then
+        echo "⚠️ 等待超时：请查看日志 $LOG_FILE"
+    fi
+done
