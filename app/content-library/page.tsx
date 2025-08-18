@@ -65,6 +65,7 @@ import {
 import { PageLayout } from '@/components/layout/PageLayout'
 import { Card } from '@/components/ui/Card'
 import { StatCard } from '@/components/ui/StatCard'
+import { SmartImage } from '@/components/ui/SmartImage'
 import { ImportModal } from '@/components/content-library/ImportModal'
 import { useContentLibrary } from '@/hooks/useContentLibrary'
 import type { ContentItem } from '@/types'
@@ -419,28 +420,14 @@ export default function ContentLibraryPage() {
                     <VStack align="start" spacing={4}>
                       {/* 封面图 - 使用图片数组的第一张 */}
                       {content.images_urls && content.images_urls.length > 0 ? (
-                        <Image
+                        <SmartImage
                           src={content.images_urls[0]}
                           alt={content.title}
                           borderRadius="md"
                           w="full"
                           h="150px"
                           objectFit="cover"
-                          fallback={
-                            <Box
-                              w="full"
-                              h="150px"
-                              bg="gray.100"
-                              borderRadius="md"
-                              display="flex"
-                              alignItems="center"
-                              justifyContent="center"
-                            >
-                              <Text color="gray.400" fontSize="sm">
-                                📷 图片加载失败
-                              </Text>
-                            </Box>
-                          }
+                          fallbackText="📷 图片加载失败"
                         />
                       ) : (
                         <Box
@@ -776,27 +763,13 @@ export default function ContentLibraryPage() {
                 )}
                 
                 {selectedContent.images_urls && selectedContent.images_urls.length > 0 && (
-                  <Image
+                  <SmartImage
                     src={selectedContent.images_urls[0]}
                     alt={selectedContent.title}
                     borderRadius="md"
                     maxH="200px"
                     objectFit="cover"
-                    fallback={
-                      <Box
-                        w="full"
-                        h="200px"
-                        bg="gray.100"
-                        borderRadius="md"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                      >
-                        <Text color="gray.400" fontSize="sm">
-                          📷 图片加载失败
-                        </Text>
-                      </Box>
-                    }
+                    fallbackText="📷 图片加载失败"
                   />
                 )}
                 
