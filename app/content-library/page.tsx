@@ -53,6 +53,7 @@ import {
   RiAddLine,
   RiEyeLine,
   RiHeartLine,
+  RiHeartFill,
   RiShareLine,
   RiFireLine,
   RiLineChartLine,
@@ -77,6 +78,7 @@ export default function ContentLibraryPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedContent, setSelectedContent] = useState<ContentItem | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
   const { isOpen, onOpen, onClose } = useDisclosure()
   const {
     isOpen: isViewOpen,
@@ -96,21 +98,31 @@ export default function ContentLibraryPage() {
     stats,
     loading,
     importLoading,
+    totalCount,
+    totalPages,
     createContent,
     updateContent,
     deleteContent,
     importContents,
     downloadTemplate,
   } = useContentLibrary({
+    page: currentPage,
+    limit: 20, // 每页20条
     search: searchTerm,
     category: categoryFilter,
     platform: platformFilter,
     status: statusFilter,
-    limit: 50, // 增加单页显示数量
+    sortBy: 'published_at', // 按发布时间排序
+    sortOrder: 'desc', // 倒序
   })
 
   // 获取所有可用标签
   const allTags = Array.from(new Set(contents.flatMap(content => content.tags || [])))
+
+  // 当筛选条件改变时重置到第一页
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, categoryFilter, platformFilter, statusFilter])
 
   // 过滤内容 (本地标签筛选)
   const filteredContents = contents.filter(content => {
@@ -291,13 +303,24 @@ export default function ContentLibraryPage() {
                 
                 <Select maxW="150px" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
                   <option value="all">全部分类</option>
-                  <option value="穿搭">穿搭</option>
+                  <option value="汽车">汽车</option>
                   <option value="美妆">美妆</option>
-                  <option value="居家">居家</option>
-                  <option value="健康">健康</option>
+                  <option value="穿搭">穿搭</option>
                   <option value="美食">美食</option>
-                  <option value="旅行">旅行</option>
+                  <option value="母婴">母婴</option>
+                  <option value="宠物">宠物</option>
+                  <option value="职场">职场</option>
+                  <option value="理财">理财</option>
+                  <option value="情感">情感</option>
+                  <option value="摄影">摄影</option>
+                  <option value="读书">读书</option>
+                  <option value="生活">生活</option>
+                  <option value="旅游">旅游</option>
+                  <option value="健身">健身</option>
+                  <option value="教育">教育</option>
                   <option value="科技">科技</option>
+                  <option value="娱乐">娱乐</option>
+                  <option value="家居">家居</option>
                 </Select>
 
                 <Select maxW="150px" value={platformFilter} onChange={(e) => setPlatformFilter(e.target.value)}>
@@ -394,16 +417,45 @@ export default function ContentLibraryPage() {
                 >
                   <Card hover>
                     <VStack align="start" spacing={4}>
-                      {/* 缩略图 */}
-                      {content.thumbnail_url && (
+                      {/* 封面图 - 使用图片数组的第一张 */}
+                      {content.images_urls && content.images_urls.length > 0 ? (
                         <Image
-                          src={content.thumbnail_url}
+                          src={content.images_urls[0]}
                           alt={content.title}
                           borderRadius="md"
                           w="full"
                           h="150px"
                           objectFit="cover"
+                          fallback={
+                            <Box
+                              w="full"
+                              h="150px"
+                              bg="gray.100"
+                              borderRadius="md"
+                              display="flex"
+                              alignItems="center"
+                              justifyContent="center"
+                            >
+                              <Text color="gray.400" fontSize="sm">
+                                📷 图片加载失败
+                              </Text>
+                            </Box>
+                          }
                         />
+                      ) : (
+                        <Box
+                          w="full"
+                          h="150px"
+                          bg="gray.100"
+                          borderRadius="md"
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                        >
+                          <Text color="gray.400" fontSize="sm">
+                            📷 暂无封面图
+                          </Text>
+                        </Box>
                       )}
 
                       <Flex justify="space-between" w="full" align="start">
@@ -548,6 +600,62 @@ export default function ContentLibraryPage() {
               ))}
             </Grid>
           )}
+          
+          {/* 分页组件 */}
+          {totalPages > 1 && (
+            <HStack justify="center" spacing={2} mt={8}>
+              <Button
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                isDisabled={currentPage === 1}
+                leftIcon={<Text>‹</Text>}
+              >
+                上一页
+              </Button>
+              
+              {/* 页码按钮 */}
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                return (
+                  <Button
+                    key={pageNum}
+                    size="sm"
+                    variant={currentPage === pageNum ? 'solid' : 'outline'}
+                    colorScheme={currentPage === pageNum ? 'blue' : 'gray'}
+                    onClick={() => setCurrentPage(pageNum)}
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+              
+              <Button
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                isDisabled={currentPage === totalPages}
+                rightIcon={<Text>›</Text>}
+              >
+                下一页
+              </Button>
+            </HStack>
+          )}
+          
+          {/* 分页信息 */}
+          {totalCount > 0 && (
+            <Text fontSize="sm" color="gray.500" textAlign="center" mt={4}>
+              共 {totalCount} 条内容，第 {currentPage} / {totalPages} 页
+            </Text>
+          )}
         </MotionBox>
       </VStack>
 
@@ -582,10 +690,24 @@ export default function ContentLibraryPage() {
                 <FormControl>
                   <FormLabel>分类</FormLabel>
                   <Select defaultValue={selectedContent?.category || ''}>
-                    <option value="穿搭">穿搭</option>
+                    <option value="汽车">汽车</option>
                     <option value="美妆">美妆</option>
-                    <option value="居家">居家</option>
-                    <option value="健康">健康</option>
+                    <option value="穿搭">穿搭</option>
+                    <option value="美食">美食</option>
+                    <option value="母婴">母婴</option>
+                    <option value="宠物">宠物</option>
+                    <option value="职场">职场</option>
+                    <option value="理财">理财</option>
+                    <option value="情感">情感</option>
+                    <option value="摄影">摄影</option>
+                    <option value="读书">读书</option>
+                    <option value="生活">生活</option>
+                    <option value="旅游">旅游</option>
+                    <option value="健身">健身</option>
+                    <option value="教育">教育</option>
+                    <option value="科技">科技</option>
+                    <option value="娱乐">娱乐</option>
+                    <option value="家居">家居</option>
                   </Select>
                 </FormControl>
 
@@ -653,13 +775,28 @@ export default function ContentLibraryPage() {
                   </Text>
                 )}
                 
-                {selectedContent.thumbnail_url && (
+                {selectedContent.images_urls && selectedContent.images_urls.length > 0 && (
                   <Image
-                    src={selectedContent.thumbnail_url}
+                    src={selectedContent.images_urls[0]}
                     alt={selectedContent.title}
                     borderRadius="md"
                     maxH="200px"
                     objectFit="cover"
+                    fallback={
+                      <Box
+                        w="full"
+                        h="200px"
+                        bg="gray.100"
+                        borderRadius="md"
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="center"
+                      >
+                        <Text color="gray.400" fontSize="sm">
+                          📷 图片加载失败
+                        </Text>
+                      </Box>
+                    }
                   />
                 )}
                 
@@ -727,21 +864,74 @@ export default function ContentLibraryPage() {
 
                 {selectedContent.top_comments && selectedContent.top_comments.length > 0 && (
                   <Box>
-                    <Text fontSize="sm" fontWeight="semibold" mb={2}>热门评论:</Text>
-                    <VStack align="start" spacing={2}>
-                      {selectedContent.top_comments.slice(0, 3).map((comment, index) => (
-                        <Box key={index} p={3} bg="gray.50" borderRadius="md" w="full">
-                          <HStack justify="space-between">
-                            <Text fontSize="sm" fontWeight="semibold">@{comment.author}</Text>
-                            <HStack spacing={1}>
-                              <RiHeartLine size="12px" />
-                              <Text fontSize="xs">{comment.likes}</Text>
+                    <Text fontSize="md" fontWeight="semibold" mb={3} color="blue.600">
+                      💬 热门评论
+                    </Text>
+                    <VStack align="start" spacing={3}>
+                      {selectedContent.top_comments.slice(0, 5).map((comment, index) => (
+                        <Box 
+                          key={index} 
+                          p={4} 
+                          bg="white"
+                          border="1px solid"
+                          borderColor="gray.200"
+                          borderRadius="lg" 
+                          w="full"
+                          shadow="sm"
+                          _hover={{ shadow: "md", transform: "translateY(-1px)" }}
+                          transition="all 0.2s"
+                        >
+                          <HStack justify="space-between" mb={2}>
+                            <HStack spacing={2}>
+                              <Box
+                                w={6}
+                                h={6}
+                                borderRadius="full"
+                                bg="blue.500"
+                                display="flex"
+                                alignItems="center"
+                                justifyContent="center"
+                              >
+                                <Text color="white" fontSize="xs" fontWeight="bold">
+                                  {comment.author?.charAt(0)?.toUpperCase() || 'U'}
+                                </Text>
+                              </Box>
+                              <Text fontSize="sm" fontWeight="semibold" color="gray.700">
+                                {comment.author || '匿名用户'}
+                              </Text>
+                            </HStack>
+                            <HStack spacing={1} color="red.500">
+                              <RiHeartFill size="14px" />
+                              <Text fontSize="sm" fontWeight="semibold">{comment.likes || 0}</Text>
                             </HStack>
                           </HStack>
-                          <Text fontSize="sm" mt={1}>{comment.content}</Text>
+                          <Text fontSize="sm" color="gray.600" lineHeight="1.5">
+                            {comment.content || '暂无评论内容'}
+                          </Text>
                         </Box>
                       ))}
                     </VStack>
+                  </Box>
+                )}
+                
+                {/* 如果没有评论，显示提示 */}
+                {(!selectedContent.top_comments || selectedContent.top_comments.length === 0) && (
+                  <Box>
+                    <Text fontSize="md" fontWeight="semibold" mb={3} color="blue.600">
+                      💬 热门评论
+                    </Text>
+                    <Box 
+                      p={6} 
+                      bg="gray.50"
+                      border="2px dashed"
+                      borderColor="gray.300"
+                      borderRadius="lg" 
+                      textAlign="center"
+                    >
+                      <Text fontSize="sm" color="gray.500">
+                        暂无评论数据
+                      </Text>
+                    </Box>
                   </Box>
                 )}
 

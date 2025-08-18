@@ -2,6 +2,45 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseServiceRole } from '@/lib/supabase'
 import type { ContentItem } from '@/types'
 
+// 智能内容分类函数（基于关键词匹配）
+function autoClassifyContent(text: string): string {
+  const content = text.toLowerCase()
+  
+  // 定义分类关键词
+  const categories = {
+    '汽车': ['汽车', '车', '理想', '小米汽车', 'su7', '新能源', '电动车', '燃油车', '试驾', '买车', '选车', '车评', '车型', '汽车评测', '驾驶', '自驾', 'byd', '比亚迪', '特斯拉', 'tesla', '蔚来', '小鹏', '理想one', 'l7', 'l8', 'l9'],
+    '美妆': ['化妆', '护肤', '美妆', '口红', '粉底', '眼影', '面膜', '精华', '洗面奶', '防晒', '美白', '抗老', '彩妆', '底妆', '唇妆'],
+    '穿搭': ['穿搭', '服装', '搭配', '时尚', '衣服', '裙子', '外套', '鞋子', '包包', '配饰', '风格', '造型', 'outfit', 'ootd', '街拍'],
+    '美食': ['美食', '做饭', '菜谱', '餐厅', '小吃', '甜品', '蛋糕', '料理', '烘焙', '食材', '味道', '好吃', '探店', '美食推荐'],
+    '母婴': ['母婴', '育儿', '宝宝', '孕妇', '怀孕', '婴儿', '儿童', '亲子', '早教', '奶粉', '纸尿裤', '玩具', '童装', '孕期', '产后', '备孕'],
+    '宠物': ['宠物', '猫', '狗', '猫咪', '狗狗', '萌宠', '宠物用品', '猫粮', '狗粮', '宠物医院', '养宠', '铲屎官', '宠物护理'],
+    '职场': ['职场', '工作', '求职', '面试', '简历', '职业', '升职', '加薪', '办公', '同事', '老板', '职业规划', '跳槽', '实习'],
+    '理财': ['理财', '投资', '基金', '股票', '存钱', '省钱', '赚钱', '副业', '财务', '理财规划', '金融', '经济', '创业', '被动收入'],
+    '情感': ['情感', '恋爱', '感情', '分手', '结婚', '婚姻', '单身', '相亲', '约会', '异地恋', '心理', '情绪', '治愈', '自我成长'],
+    '摄影': ['摄影', '拍照', '相机', '修图', '滤镜', '人像', '风景', '摄影技巧', 'ps', 'lightroom', '构图', '光影', '写真'],
+    '读书': ['读书', '书籍', '阅读', '小说', '文学', '知识', '学习', '读后感', '书单', '推荐书', '作者', '经典', '畅销书'],
+    '生活': ['生活', '日常', '分享', '记录', '心情', '感悟', '经历', '体验', '感受', '生活方式', 'vlog', '生活好物'],
+    '旅游': ['旅游', '旅行', '景点', '攻略', '酒店', '机票', '风景', '游记', '度假', '出行', '打卡', '民宿', '自由行', '跟团游'],
+    '健身': ['健身', '运动', '减肥', '瘦身', '锻炼', '肌肉', '瑜伽', '跑步', '力量', '体型', '塑形', '马甲线', '健身房', '普拉提'],
+    '教育': ['学习', '教育', '知识', '技能', '经验', '方法', '技巧', '教程', '分享', '成长', '提升', '考试', '学霸', '笔记'],
+    '科技': ['科技', '数码', '手机', '电脑', '软件', 'app', '网络', '互联网', '人工智能', 'ai', 'iphone', '安卓', '科技评测'],
+    '娱乐': ['娱乐', '电影', '音乐', '游戏', '明星', '综艺', '电视', '小说', '动漫', '追星', '八卦', '剧评', '影评'],
+    '家居': ['家居', '装修', '家装', '房子', '设计', '家具', '收纳', '清洁', '整理', '装饰', '软装', '硬装', '家电', '布置']
+  }
+  
+  // 匹配分类
+  for (const [category, keywords] of Object.entries(categories)) {
+    for (const keyword of keywords) {
+      if (content.includes(keyword)) {
+        return category
+      }
+    }
+  }
+  
+  // 默认分类
+  return '生活'
+}
+
 // 获取内容列表
 export async function GET(request: NextRequest) {
   try {
@@ -73,13 +112,17 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     
-    // 验证必填字段
-    if (!body.title || !body.content || !body.category || !body.platform) {
+    // 验证核心必填字段
+    if (!body.title || !body.content) {
       return NextResponse.json({
         success: false,
-        error: '标题、内容、分类和平台为必填项'
+        error: '标题和内容为必填项'
       }, { status: 400 })
     }
+
+    // 自动设置分类和平台
+    const category = body.category?.trim() || autoClassifyContent(body.title + ' ' + body.content)
+    const platform = body.platform?.trim() || '小红书'
 
     const insertData = {
       title: body.title.trim(),
@@ -87,8 +130,8 @@ export async function POST(request: NextRequest) {
       description: body.description?.trim() || null,
       author: body.author?.trim() || null,
       source_url: body.source_url?.trim() || null,
-      category: body.category.trim(),
-      platform: body.platform.trim(),
+      category,
+      platform,
       hot_category: body.hot_category || null,
       status: body.status || 'draft',
       thumbnail_url: body.thumbnail_url?.trim() || null,
