@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useToast } from '@chakra-ui/react'
 import type { KnowledgeBase } from '@/types'
 
@@ -29,11 +29,20 @@ interface ApiResponse<T> {
   message?: string
 }
 
-export function useMilvus() {
+import type { MilvusEnvironment } from '@/lib/milvus'
+
+export function useMilvus(environment: MilvusEnvironment = 'local') {
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const toast = useToast()
+
+  // 当环境变化时，清空之前的状态
+  useEffect(() => {
+    setKnowledgeBases([]) // 清空知识库列表
+    setError(null) // 清空错误状态
+    setLoading(false) // 重置loading状态
+  }, [environment])
 
   // 获取所有知识库
   const fetchKnowledgeBases = useCallback(async () => {
@@ -41,8 +50,10 @@ export function useMilvus() {
     setError(null)
     
     try {
-      const response = await fetch('/api/knowledge-base?action=list')
+      console.log(`🔗 正在获取 "${environment}" 环境的知识库列表...`)
+      const response = await fetch(`/api/knowledge-base?action=list&env=${environment}`)
       const result: ApiResponse<MilvusCollection[]> = await response.json()
+      console.log(`📡 API响应:`, result)
       
       if (result.success && result.data) {
         // 将 Milvus 集合数据映射为 KnowledgeBase 格式
@@ -58,6 +69,7 @@ export function useMilvus() {
           updatedAt: new Date(),
         }))
         
+        console.log(`✅ 成功映射 ${knowledgeBases.length} 个知识库`)
         setKnowledgeBases(knowledgeBases)
         return knowledgeBases
       } else {
@@ -77,12 +89,12 @@ export function useMilvus() {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, environment])
 
   // 检查 Milvus 连接状态
   const checkHealth = async () => {
     try {
-      const response = await fetch('/api/knowledge-base?action=health')
+      const response = await fetch(`/api/knowledge-base?action=health&env=${environment}`)
       const result: ApiResponse<{ connected: boolean; status: string }> = await response.json()
       
       return result.success ? result.data : null
@@ -98,7 +110,7 @@ export function useMilvus() {
     setError(null)
     
     try {
-      const response = await fetch('/api/knowledge-base?action=create', {
+      const response = await fetch(`/api/knowledge-base?action=create&env=${environment}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -137,7 +149,7 @@ export function useMilvus() {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, environment, fetchKnowledgeBases])
 
   // 添加文档到知识库
   const addDocument = async (
@@ -150,7 +162,7 @@ export function useMilvus() {
     setError(null)
     
     try {
-      const response = await fetch('/api/knowledge-base?action=add-document', {
+      const response = await fetch(`/api/knowledge-base?action=add-document&env=${environment}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -204,7 +216,7 @@ export function useMilvus() {
     setError(null)
     
     try {
-      const response = await fetch('/api/knowledge-base?action=query', {
+      const response = await fetch(`/api/knowledge-base?action=query&env=${environment}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -238,7 +250,7 @@ export function useMilvus() {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, environment])
 
   // 删除知识库（完整删除）
   const deleteKnowledgeBase = useCallback(async (collectionName: string) => {
@@ -246,7 +258,7 @@ export function useMilvus() {
     setError(null)
     
     try {
-      const response = await fetch(`/api/knowledge-base?collection=${encodeURIComponent(collectionName)}&action=drop`, {
+      const response = await fetch(`/api/knowledge-base?collection=${encodeURIComponent(collectionName)}&action=drop&env=${environment}`, {
         method: 'DELETE',
       })
       
@@ -281,7 +293,7 @@ export function useMilvus() {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, environment, fetchKnowledgeBases])
 
   // 清空知识库数据（保留结构）
   const clearKnowledgeBase = useCallback(async (collectionName: string) => {
@@ -289,7 +301,7 @@ export function useMilvus() {
     setError(null)
     
     try {
-      const response = await fetch(`/api/knowledge-base?collection=${encodeURIComponent(collectionName)}&action=clear`, {
+      const response = await fetch(`/api/knowledge-base?collection=${encodeURIComponent(collectionName)}&action=clear&env=${environment}`, {
         method: 'DELETE',
       })
       
@@ -324,7 +336,7 @@ export function useMilvus() {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, environment, fetchKnowledgeBases])
 
   // 删除指定ID的记录
   const deleteEntities = useCallback(async (collectionName: string, ids: string[]) => {
@@ -332,7 +344,7 @@ export function useMilvus() {
     setError(null)
     
     try {
-      const response = await fetch(`/api/knowledge-base?collection=${encodeURIComponent(collectionName)}&action=entities`, {
+      const response = await fetch(`/api/knowledge-base?collection=${encodeURIComponent(collectionName)}&action=entities&env=${environment}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -368,7 +380,7 @@ export function useMilvus() {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, environment])
 
   // 根据条件删除记录
   const deleteByCondition = useCallback(async (collectionName: string, expression: string) => {
@@ -376,7 +388,7 @@ export function useMilvus() {
     setError(null)
     
     try {
-      const response = await fetch(`/api/knowledge-base?collection=${encodeURIComponent(collectionName)}&action=expression`, {
+      const response = await fetch(`/api/knowledge-base?collection=${encodeURIComponent(collectionName)}&action=expression&env=${environment}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -412,12 +424,12 @@ export function useMilvus() {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, environment])
 
   // 获取知识库统计信息
   const getKnowledgeBaseStats = async (collectionName: string) => {
     try {
-      const response = await fetch(`/api/knowledge-base?action=stats&collection=${encodeURIComponent(collectionName)}`)
+      const response = await fetch(`/api/knowledge-base?action=stats&collection=${encodeURIComponent(collectionName)}&env=${environment}`)
       const result: ApiResponse<MilvusCollection> = await response.json()
       
       if (result.success && result.data) {
@@ -453,7 +465,7 @@ export function useMilvus() {
     setError(null)
     
     try {
-      const response = await fetch('/api/xiaohongshu-import', {
+      const response = await fetch(`/api/xiaohongshu-import?env=${environment}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

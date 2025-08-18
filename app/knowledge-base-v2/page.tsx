@@ -85,6 +85,8 @@ import {
 } from 'react-icons/ri'
 import { PageLayout } from '@/components/layout/PageLayout'
 import { Card } from '@/components/ui/Card'
+import { EnvironmentSelector } from '@/components/knowledge-base/EnvironmentSelector'
+import type { MilvusEnvironment } from '@/lib/milvus'
 
 interface ImportRecord {
   id: string
@@ -116,9 +118,10 @@ export default function KnowledgeBaseV2Page() {
   const toast = useToast()
   const [selectedKB, setSelectedKB] = useState<KnowledgeBase | null>(null)
   const [activeTab, setActiveTab] = useState(0)
+  const [currentEnv, setCurrentEnv] = useState<MilvusEnvironment>('local')
   
-  // 使用真实的Milvus Hook
-    const {
+  // 使用真实的Milvus Hook，传入环境参数
+  const {
     knowledgeBases,
     loading,
     error,
@@ -128,7 +131,7 @@ export default function KnowledgeBaseV2Page() {
     clearKnowledgeBase,
     ragQuery,
     importXiaohongshuData
-  } = useMilvus()
+  } = useMilvus(currentEnv)
   
   // 弹窗控制
   const { isOpen: isNewKBOpen, onOpen: onNewKBOpen, onClose: onNewKBClose } = useDisclosure()
@@ -152,9 +155,10 @@ export default function KnowledgeBaseV2Page() {
   const fetchImportHistory = useCallback(async (collectionName?: string) => {
     try {
       const url = collectionName 
-        ? `/api/knowledge-base/import-history?collection=${encodeURIComponent(collectionName)}`
-        : '/api/knowledge-base/import-history'
+        ? `/api/knowledge-base/import-history?collection=${encodeURIComponent(collectionName)}&env=${currentEnv}`
+        : `/api/knowledge-base/import-history?env=${currentEnv}`
       
+      console.log(`📋 获取导入历史，环境: ${currentEnv}, 集合: ${collectionName || '全部'}`)
       const response = await fetch(url)
       const result = await response.json()
       
@@ -164,14 +168,60 @@ export default function KnowledgeBaseV2Page() {
     } catch (error) {
       console.error('获取导入历史失败:', error)
     }
-  }, [])
+  }, [currentEnv])
+
+  // 环境切换处理
+  const handleEnvironmentChange = useCallback(async (env: MilvusEnvironment) => {
+    // 立即更新环境
+    setCurrentEnv(env)
+    setSelectedKB(null) // 清空选中的知识库
+    setSearchResults([]) // 清空搜索结果
+    setImportHistory([]) // 清空导入历史
+    
+    // 显示切换提示
+    toast({
+      title: `正在切换到${env === 'local' ? '本地' : env === 'hosted' ? '托管' : '阿里云'}环境...`,
+      status: 'info',
+      duration: 2000,
+      isClosable: true,
+    })
+
+    // 短暂延迟确保状态更新完成，然后刷新数据
+    setTimeout(async () => {
+      try {
+        console.log(`🔄 开始为环境 "${env}" 获取知识库数据`)
+        const kbs = await fetchKnowledgeBases()
+        console.log(`📚 获取到 ${kbs?.length || 0} 个知识库`)
+        
+        await fetchImportHistory()
+        console.log(`✅ 环境切换到 "${env}" 完成`)
+        
+        toast({
+          title: `已成功切换到${env === 'local' ? '本地' : env === 'hosted' ? '托管' : '阿里云'}环境`,
+          description: `发现 ${kbs?.length || 0} 个知识库`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        })
+      } catch (error) {
+        console.error('环境切换后刷新数据失败:', error)
+        toast({
+          title: '环境切换成功，但数据刷新失败',
+          description: '请手动刷新页面或重试',
+          status: 'warning',
+          duration: 5000,
+          isClosable: true,
+        })
+      }
+    }, 100)
+  }, [toast, fetchKnowledgeBases, fetchImportHistory])
 
   // 在组件加载时获取真实数据（只执行一次）
   useEffect(() => {
     fetchKnowledgeBases()
     fetchImportHistory() // 获取全部导入历史
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // 空依赖数组，只在组件挂载时执行一次
+  }, [currentEnv]) // 当环境切换时重新获取数据
 
   // 当选中知识库变化时，获取该知识库的导入历史
   useEffect(() => {
@@ -226,6 +276,55 @@ export default function KnowledgeBaseV2Page() {
     )
   }
 
+  // 名称验证和转换函数
+  const normalizeCollectionName = (name: string): { normalized: string; original: string } => {
+    const original = name.trim()
+    
+    // 中英文映射表
+    const nameMap: Record<string, string> = {
+      '旅游': 'travel',
+      '小红书': 'xiaohongshu', 
+      '内容': 'content',
+      '美食': 'food',
+      '时尚': 'fashion',
+      '科技': 'tech',
+      '教育': 'education',
+      '健康': 'health',
+      '运动': 'sports',
+      '音乐': 'music',
+      '电影': 'movie',
+      '游戏': 'game'
+    }
+    
+    let normalized = original
+    
+    // 替换常见中文词汇
+    Object.entries(nameMap).forEach(([chinese, english]) => {
+      normalized = normalized.replace(new RegExp(chinese, 'g'), english)
+    })
+    
+    // 移除所有非字母数字字符，替换为下划线
+    normalized = normalized
+      .replace(/[^\w\s]/g, '_')  // 特殊字符替换为下划线
+      .replace(/[\u4e00-\u9fff]/g, 'cn')  // 剩余中文字符替换为cn
+      .replace(/\s+/g, '_')      // 空格替换为下划线
+      .replace(/_+/g, '_')       // 多个下划线合并为一个
+      .replace(/^_|_$/g, '')     // 去除首尾下划线
+      .toLowerCase()             // 转小写
+    
+    // 确保以字母开头
+    if (!/^[a-zA-Z]/.test(normalized)) {
+      normalized = `kb_${normalized}`
+    }
+    
+    // 长度限制
+    if (normalized.length > 50) {
+      normalized = normalized.substring(0, 50).replace(/_$/, '')
+    }
+    
+    return { normalized, original }
+  }
+
   // 处理新建知识库
   const handleCreateKB = async () => {
     if (!newKBName.trim()) {
@@ -239,7 +338,21 @@ export default function KnowledgeBaseV2Page() {
     }
 
     try {
-      const collectionName = `lab_${newKBName.trim()}`
+      const { normalized, original } = normalizeCollectionName(newKBName)
+      const collectionName = `lab_${normalized}`
+      
+      // 如果名称被转换了，给用户提示
+      if (normalized !== original.toLowerCase().replace(/\s+/g, '_')) {
+        toast({
+          title: '知识库名称已优化',
+          description: `"${original}" → "${normalized}"`,
+          status: 'info',
+          duration: 4000,
+          isClosable: true,
+        })
+      }
+      
+      console.log(`🏗️ 创建知识库: ${original} → ${collectionName}`)
       const success = await createKnowledgeBase(collectionName)
       
       if (success) {
@@ -430,7 +543,7 @@ export default function KnowledgeBaseV2Page() {
           importedCount: result.importedCount || 0
         })
         
-        const updateResponse = await fetch('/api/knowledge-base/import-history', {
+        const updateResponse = await fetch(`/api/knowledge-base/import-history?env=${currentEnv}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -651,26 +764,51 @@ export default function KnowledgeBaseV2Page() {
 
   return (
     <PageLayout>
-      <Flex h="calc(100vh - 80px)" gap={6}>
-        {/* 左侧：知识库列表 */}
-        <Box w="350px" flexShrink={0}>
-          <Card h="full" p={0}>
-            <VStack spacing={0} align="stretch" h="full">
-                                   {/* 标题和新建按钮 */}
-                     <Box p={4} borderBottom="1px" borderColor={colors.border}>
-                <VStack align="stretch" spacing={3}>
-                  <Text fontSize="lg" fontWeight="bold">
-                    🧠 知识库列表
-                  </Text>
-                  <Button
-                    leftIcon={<RiAddLine />}
-                    colorScheme="blue"
-                    onClick={onNewKBOpen}
-                  >
-                    新建知识库
-                  </Button>
-                </VStack>
-              </Box>
+      <VStack spacing={4} align="stretch">
+        {/* 顶部：环境选择器 */}
+        <Card p={4}>
+          <Flex justify="space-between" align="center">
+            <Text fontSize="xl" fontWeight="bold">
+              🧠 知识库管理
+            </Text>
+            <EnvironmentSelector
+              value={currentEnv}
+              onChange={handleEnvironmentChange}
+            />
+          </Flex>
+        </Card>
+
+        {/* 主要内容区域 */}
+        <Flex h="calc(100vh - 160px)" gap={6}>
+          {/* 左侧：知识库列表 */}
+          <Box w="350px" flexShrink={0}>
+            <Card h="full" p={0}>
+              <VStack spacing={0} align="stretch" h="full">
+                {/* 标题和新建按钮 */}
+                <Box p={4} borderBottom="1px" borderColor={colors.border}>
+                  <VStack align="stretch" spacing={3}>
+                    <HStack justify="space-between" align="center">
+                      <Text fontSize="md" fontWeight="bold">
+                        知识库列表
+                      </Text>
+                      <Badge 
+                        colorScheme={currentEnv === 'local' ? 'green' : currentEnv === 'hosted' ? 'blue' : 'purple'}
+                        variant="subtle"
+                        fontSize="xs"
+                      >
+                        {currentEnv === 'local' ? '本地' : currentEnv === 'hosted' ? '托管' : '阿里云'}
+                      </Badge>
+                    </HStack>
+                    <Button
+                      leftIcon={<RiAddLine />}
+                      colorScheme="blue"
+                      size="sm"
+                      onClick={onNewKBOpen}
+                    >
+                      新建知识库
+                    </Button>
+                  </VStack>
+                </Box>
 
               {/* 知识库列表 */}
               <Box flex={1} overflowY="auto" p={2}>
@@ -1204,23 +1342,58 @@ export default function KnowledgeBaseV2Page() {
             </Card>
           )}
         </Box>
-      </Flex>
+        </Flex>
+      </VStack>
 
       {/* 新建知识库弹窗 */}
-      <Modal isOpen={isNewKBOpen} onClose={onNewKBClose}>
+      <Modal isOpen={isNewKBOpen} onClose={onNewKBClose} size="md">
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>新建知识库</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            <FormControl>
-              <FormLabel>知识库名称</FormLabel>
-              <Input
-                value={newKBName}
-                onChange={(e) => setNewKBName(e.target.value)}
-                placeholder="输入知识库名称"
-              />
-            </FormControl>
+            <VStack spacing={4} align="stretch">
+              <FormControl>
+                <FormLabel>知识库名称</FormLabel>
+                <Input
+                  value={newKBName}
+                  onChange={(e) => setNewKBName(e.target.value)}
+                  placeholder="例如：旅游小红书内容、美食推荐、科技资讯等"
+                />
+                <Text fontSize="sm" color="gray.500" mt={1}>
+                  💡 支持中文名称，系统会自动转换为符合规范的英文标识
+                </Text>
+                
+                {/* 帮助信息 */}
+                <Alert status="info" mt={2} borderRadius="md" fontSize="sm">
+                  <AlertIcon />
+                  <Box>
+                    <Text fontWeight="medium">命名规则说明：</Text>
+                    <Text fontSize="xs" mt={1}>
+                      向量数据库要求集合名只能包含字母、数字和下划线，且必须以字母开头。
+                      中文名称会被智能转换，如："旅游小红书内容" → "travel_xiaohongshu_content"
+                    </Text>
+                  </Box>
+                </Alert>
+              </FormControl>
+              
+              {/* 名称预览 */}
+              {newKBName.trim() && (
+                <Box p={3} bg={colors.bg} borderRadius="md" border="1px" borderColor={colors.border}>
+                  <Text fontSize="sm" fontWeight="medium" mb={2}>📋 预览：</Text>
+                  <HStack spacing={2}>
+                    <Text fontSize="sm" color="gray.600">显示名称:</Text>
+                    <Code fontSize="sm">{newKBName.trim()}</Code>
+                  </HStack>
+                  <HStack spacing={2} mt={1}>
+                    <Text fontSize="sm" color="gray.600">系统标识:</Text>
+                    <Code fontSize="sm" colorScheme="blue">
+                      lab_{normalizeCollectionName(newKBName).normalized}
+                    </Code>
+                  </HStack>
+                </Box>
+              )}
+            </VStack>
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={onNewKBClose}>

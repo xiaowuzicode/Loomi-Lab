@@ -25,6 +25,7 @@ import {
   RiSettings3Line,
   RiInstagramLine,
   RiSparklingFill,
+  RiMessageLine,
 } from 'react-icons/ri'
 
 // const Box = Box // 暂时移除动画
@@ -82,6 +83,12 @@ const getNavItems = (userCount: number): NavItem[] => [
     href: '/prompts',
     icon: RiQuillPenLine,
     color: 'cyan.400',
+  },
+  {
+    label: '用户消息查询',
+    href: '/message-query',
+    icon: RiMessageLine,
+    color: 'orange.400',
   },
   {
     label: '小红书管理',

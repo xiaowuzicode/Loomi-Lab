@@ -1,14 +1,36 @@
 import { MilvusClient, DataType, ErrorCode } from '@zilliz/milvus2-sdk-node'
 
-// Milvus 连接配置 - 本地Docker部署
-const MILVUS_CONFIG = {
-  address: process.env.MILVUS_ENDPOINT || 'http://127.0.0.1:19530',
-  // 本地 Milvus 通常不需要认证，但可以配置token
-  ...(process.env.MILVUS_USERNAME && process.env.MILVUS_PASSWORD ? {
-    token: `${process.env.MILVUS_USERNAME}:${process.env.MILVUS_PASSWORD}`,
-  } : {}),
-  // 指定数据库
-  database: process.env.MILVUS_DATABASE || 'default',
+// Milvus环境类型
+export type MilvusEnvironment = 'local' | 'hosted' | 'aliyun'
+
+// 获取Milvus配置
+function getMilvusConfig(env: MilvusEnvironment = 'local') {
+  switch (env) {
+    case 'hosted':
+      // 托管服务配置（Zilliz Cloud）
+      return {
+        address: process.env.MILVUS_HOSTED_URL || '',
+        token: process.env.MILVUS_HOSTED_TOKEN || '',
+        database: process.env.MILVUS_HOSTED_DATABASE || 'default',
+      }
+    case 'aliyun':
+      // 阿里云服务配置
+      return {
+        address: process.env.MILVUS_ALIYUN_URL || '',
+        token: process.env.MILVUS_ALIYUN_TOKEN || '',
+        database: process.env.MILVUS_ALIYUN_DATABASE || 'default',
+      }
+    default: // 'local'
+      // 本地Docker配置
+      return {
+        address: process.env.MILVUS_ENDPOINT || 'http://127.0.0.1:19530',
+        // 本地 Milvus 通常不需要认证，但可以配置token
+        ...(process.env.MILVUS_USERNAME && process.env.MILVUS_PASSWORD ? {
+          token: `${process.env.MILVUS_USERNAME}:${process.env.MILVUS_PASSWORD}`,
+        } : {}),
+        database: process.env.MILVUS_DATABASE || 'default',
+      }
+  }
 }
 
 // Milvus 功能开关 - 可以通过环境变量禁用
@@ -17,14 +39,46 @@ const MILVUS_ENABLED = process.env.MILVUS_ENABLED !== 'false'
 export class MilvusService {
   private client: MilvusClient | null = null
   private isConnected: boolean = false
+  private currentEnv: MilvusEnvironment
+  private config: any
 
-  constructor() {
+  constructor(env: MilvusEnvironment = 'local') {
+    this.currentEnv = env
+    this.config = getMilvusConfig(env)
+    console.log(`🏗️ 创建 ${env} 环境的Milvus服务实例`)
+    console.log(`⚙️ 配置信息:`, {
+      environment: env,
+      address: this.config.address,
+      hasToken: !!this.config.token,
+      database: this.config.database
+    })
     // 延迟初始化，避免构建时加载 Milvus SDK
+  }
+
+  /**
+   * 切换环境并重新连接
+   */
+  switchEnvironment(env: MilvusEnvironment): void {
+    if (this.currentEnv !== env) {
+      this.currentEnv = env
+      this.config = getMilvusConfig(env)
+      this.client = null // 重置客户端，下次使用时重新创建
+      this.isConnected = false
+      console.log(`🔄 已切换到 ${env === 'local' ? '本地' : '托管'} 环境`)
+    }
+  }
+
+  /**
+   * 获取当前环境
+   */
+  getCurrentEnvironment(): MilvusEnvironment {
+    return this.currentEnv
   }
 
   private initClient() {
     if (!this.client) {
-      this.client = new MilvusClient(MILVUS_CONFIG)
+      this.client = new MilvusClient(this.config)
+      console.log(`🔗 初始化 ${this.currentEnv === 'local' ? '本地' : '托管'} Milvus 客户端:`, this.config.address)
     }
     return this.client
   }
@@ -43,17 +97,17 @@ export class MilvusService {
       const res = await client.checkHealth()
       if (res.isHealthy) {
         this.isConnected = true
-        console.log('✅ Milvus 连接成功')
+        console.log(`✅ Milvus ${this.currentEnv === 'local' ? '本地' : '托管'} 环境连接成功`)
         return true
       }
-      console.error('❌ Milvus 健康检查失败')
+      console.error(`❌ Milvus ${this.currentEnv === 'local' ? '本地' : '托管'} 环境健康检查失败`)
       return false
     } catch (error: any) {
       const errorMsg = error?.details || error?.message || error
       if (errorMsg.includes('cluster does not exist') || errorMsg.includes('UNAUTHENTICATED')) {
-        console.warn('⚠️ Milvus 集群不可用 - 功能将被禁用:', errorMsg)
+        console.warn(`⚠️ Milvus ${this.currentEnv === 'local' ? '本地' : '托管'} 环境集群不可用 - 功能将被禁用:`, errorMsg)
       } else {
-        console.error('❌ Milvus 连接失败:', errorMsg)
+        console.error(`❌ Milvus ${this.currentEnv === 'local' ? '本地' : '托管'} 环境连接失败:`, errorMsg)
       }
       this.isConnected = false
       return false
@@ -320,18 +374,19 @@ export class MilvusService {
     try {
       const client = this.initClient()
       
-      // 删除指定ID的实体
+      // 删除指定ID的实体 - 使用表达式方式
+      const idsStr = ids.map(id => `"${id}"`).join(', ')
       const res = await client.deleteEntities({
         collection_name: collectionName,
-        ids: ids
+        expr: `id in [${idsStr}]`
       })
 
-      if (res.error_code === ErrorCode.SUCCESS) {
+      if ((res as any).status?.error_code === ErrorCode.SUCCESS) {
         console.log(`✅ 成功删除 ${ids.length} 条记录从集合 ${collectionName}`)
         return true
       }
 
-      console.error(`❌ 删除记录失败: ${res.reason}`)
+      console.error(`❌ 删除记录失败: ${(res as any).status?.reason || 'Unknown error'}`)
       return false
     } catch (error) {
       console.error('❌ 删除记录异常:', error)
@@ -352,12 +407,12 @@ export class MilvusService {
         expr: expression
       })
 
-      if (res.error_code === ErrorCode.SUCCESS) {
+      if ((res as any).status?.error_code === ErrorCode.SUCCESS) {
         console.log(`✅ 成功根据条件删除记录: ${expression}`)
         return true
       }
 
-      console.error(`❌ 条件删除失败: ${res.reason}`)
+      console.error(`❌ 条件删除失败: ${(res as any).status?.reason || 'Unknown error'}`)
       return false
     } catch (error) {
       console.error('❌ 条件删除异常:', error)
@@ -373,7 +428,7 @@ export class MilvusService {
       // 获取集合统计信息来确认是否有数据
       const stats = await this.getCollectionStats(collectionName)
       
-      if (stats.row_count === 0) {
+      if (!stats || stats.row_count === 0) {
         console.log(`✅ 集合 ${collectionName} 已经是空的`)
         return true
       }
@@ -392,7 +447,7 @@ export class MilvusService {
       if (success) {
         // 验证清空是否成功
         const afterStats = await this.getCollectionStats(collectionName)
-        if (afterStats.row_count === 0) {
+        if (!afterStats || afterStats.row_count === 0) {
           console.log(`✅ 集合 ${collectionName} 已成功清空`)
           return true
         } else {
@@ -470,8 +525,44 @@ function generateMockEmbedding(text: string): number[] {
   return vector.map(val => val / norm)
 }
 
-// 创建全局 Milvus 服务实例
-export const milvusService = new MilvusService()
+// 创建全局 Milvus 服务实例（默认本地环境）
+const defaultEnv = (process.env.MILVUS_DEFAULT_ENV as MilvusEnvironment) || 'local'
+export const milvusService = new MilvusService(defaultEnv)
+
+// Milvus环境管理工具
+export class MilvusEnvironmentManager {
+  // 创建指定环境的Milvus服务实例
+  static createService(env: MilvusEnvironment): MilvusService {
+    return new MilvusService(env)
+  }
+  
+  // 获取环境配置信息
+  static getEnvironmentInfo(env: MilvusEnvironment) {
+    const config = getMilvusConfig(env)
+    const envNames = {
+      'local': '本地环境',
+      'hosted': '托管环境', 
+      'aliyun': '阿里云环境'
+    }
+    
+    return {
+      environment: env,
+      address: config.address,
+      database: config.database,
+      hasToken: !!config.token,
+      name: envNames[env]
+    }
+  }
+  
+  // 获取所有可用环境
+  static getAvailableEnvironments(): { env: MilvusEnvironment, info: any }[] {
+    return [
+      { env: 'local', info: this.getEnvironmentInfo('local') },
+      { env: 'hosted', info: this.getEnvironmentInfo('hosted') },
+      { env: 'aliyun', info: this.getEnvironmentInfo('aliyun') }
+    ]
+  }
+}
 
 // 文档处理工具类
 export class DocumentProcessor {
