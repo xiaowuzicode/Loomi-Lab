@@ -56,36 +56,25 @@ import {
   RiShareLine,
   RiFireLine,
   RiLineChartLine,
+  RiUploadLine,
+  RiDownloadLine,
+  RiMessageLine,
+  RiStarLine,
 } from 'react-icons/ri'
 import { PageLayout } from '@/components/layout/PageLayout'
 import { Card } from '@/components/ui/Card'
 import { StatCard } from '@/components/ui/StatCard'
+import { ImportModal } from '@/components/content-library/ImportModal'
+import { useContentLibrary } from '@/hooks/useContentLibrary'
+import type { ContentItem } from '@/types'
 
 const MotionBox = motion(Box)
 
-interface ContentItem {
-  id: string
-  title: string
-  content: string
-  category: string
-  tags: string[]
-  platform: string
-  engagement_rate: number
-  likes: number
-  shares: number
-  views: number
-  status: 'published' | 'draft' | 'archived'
-  created_at: string
-  updated_at: string
-  thumbnail?: string
-}
-
 export default function ContentLibraryPage() {
-  const [contents, setContents] = useState<ContentItem[]>([])
-  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [platformFilter, setPlatformFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedContent, setSelectedContent] = useState<ContentItem | null>(null)
   const { isOpen, onOpen, onClose } = useDisclosure()
@@ -94,104 +83,39 @@ export default function ContentLibraryPage() {
     onOpen: onViewOpen,
     onClose: onViewClose,
   } = useDisclosure()
+  const {
+    isOpen: isImportOpen,
+    onOpen: onImportOpen,
+    onClose: onImportClose,
+  } = useDisclosure()
   const toast = useToast()
 
-  const bgColor = useColorModeValue('white', 'gray.800')
-  const borderColor = useColorModeValue('gray.200', 'gray.700')
-
-  // 模拟数据
-  useEffect(() => {
-    const fetchContents = async () => {
-      setLoading(true)
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      const mockContents: ContentItem[] = [
-        {
-          id: 'content_001',
-          title: '秋季穿搭指南｜温柔系女孩必备单品',
-          content: '秋天来了，又到了展现温柔系穿搭的季节～今天给大家分享几个超实用的秋季穿搭技巧，让你轻松变身温柔小仙女✨\n\n1️⃣ 针织开衫 + 半身裙\n温柔的针织开衫搭配飘逸的半身裙，既保暖又优雅...',
-          category: '穿搭',
-          tags: ['秋季穿搭', '温柔系', '针织开衫', '半身裙'],
-          platform: '小红书',
-          engagement_rate: 8.5,
-          likes: 1250,
-          shares: 89,
-          views: 15600,
-          status: 'published',
-          created_at: '2024-01-20T10:30:00Z',
-          updated_at: '2024-01-20T15:45:00Z',
-          thumbnail: 'https://images.unsplash.com/photo-1544966503-7cc5ac882d5f?w=300&h=200&fit=crop',
-        },
-        {
-          id: 'content_002',
-          title: '护肤小白必看｜建立正确护肤步骤',
-          content: '很多小仙女问我护肤的正确步骤是什么？今天就来详细分享一下基础护肤的完整流程～\n\n🧼 第一步：清洁\n选择温和的洁面产品，早晚各一次...',
-          category: '美妆',
-          tags: ['护肤', '护肤步骤', '护肤小白', '基础护肤'],
-          platform: '小红书',
-          engagement_rate: 12.3,
-          likes: 2100,
-          shares: 156,
-          views: 18900,
-          status: 'published',
-          created_at: '2024-01-18T14:20:00Z',
-          updated_at: '2024-01-18T16:30:00Z',
-          thumbnail: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=300&h=200&fit=crop',
-        },
-        {
-          id: 'content_003',
-          title: '居家好物推荐｜提升幸福感的小物件',
-          content: '分享一些我最近入手的居家好物，每一样都超级实用，真的能让生活幸福感翻倍！💕\n\n🕯️ 香薰蜡烛\n点上一支香薰蜡烛，瞬间营造温馨氛围...',
-          category: '居家',
-          tags: ['居家好物', '生活好物', '幸福感', '居家装饰'],
-          platform: '小红书',
-          engagement_rate: 6.8,
-          likes: 890,
-          shares: 67,
-          views: 12400,
-          status: 'published',
-          created_at: '2024-01-15T11:15:00Z',
-          updated_at: '2024-01-15T12:20:00Z',
-          thumbnail: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=300&h=200&fit=crop',
-        },
-        {
-          id: 'content_004',
-          title: '减脂期间这样吃｜营养师推荐食谱',
-          content: '减脂不等于节食！今天分享几个营养师推荐的减脂食谱，既能满足营养需求，又能帮助健康减重～\n\n🥗 早餐：燕麦杯\n燕麦 + 酸奶 + 蓝莓...',
-          category: '健康',
-          tags: ['减脂', '健康饮食', '营养食谱', '减肥'],
-          platform: '小红书',
-          engagement_rate: 9.2,
-          likes: 1680,
-          shares: 124,
-          views: 16800,
-          status: 'draft',
-          created_at: '2024-01-19T09:30:00Z',
-          updated_at: '2024-01-19T10:45:00Z',
-          thumbnail: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=300&h=200&fit=crop',
-        },
-      ]
-      
-      setContents(mockContents)
-      setLoading(false)
-    }
-
-    fetchContents()
-  }, [])
+  // 使用内容库钩子
+  const {
+    contents,
+    stats,
+    loading,
+    importLoading,
+    createContent,
+    updateContent,
+    deleteContent,
+    importContents,
+    downloadTemplate,
+  } = useContentLibrary({
+    search: searchTerm,
+    category: categoryFilter,
+    platform: platformFilter,
+    status: statusFilter,
+    limit: 50, // 增加单页显示数量
+  })
 
   // 获取所有可用标签
-  const allTags = Array.from(new Set(contents.flatMap(content => content.tags)))
+  const allTags = Array.from(new Set(contents.flatMap(content => content.tags || [])))
 
-  // 过滤内容
+  // 过滤内容 (本地标签筛选)
   const filteredContents = contents.filter(content => {
-    const matchesSearch = content.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         content.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         content.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-    const matchesCategory = categoryFilter === 'all' || content.category === categoryFilter
-    const matchesPlatform = platformFilter === 'all' || content.platform === platformFilter
-    const matchesTags = selectedTags.length === 0 || selectedTags.every(tag => content.tags.includes(tag))
-    
-    return matchesSearch && matchesCategory && matchesPlatform && matchesTags
+    if (selectedTags.length === 0) return true
+    return selectedTags.every(tag => (content.tags || []).includes(tag))
   })
 
   const handleCreateContent = () => {
@@ -209,14 +133,12 @@ export default function ContentLibraryPage() {
     onViewOpen()
   }
 
-  const handleDeleteContent = (contentId: string) => {
-    setContents(prev => prev.filter(content => content.id !== contentId))
-    toast({
-      title: '内容已删除',
-      status: 'success',
-      duration: 3000,
-      isClosable: true,
-    })
+  const handleDeleteContent = async (contentId: string) => {
+    try {
+      await deleteContent(contentId)
+    } catch (error) {
+      // Error is handled in the hook
+    }
   }
 
   const handleTagSelect = (tag: string) => {
@@ -253,11 +175,22 @@ export default function ContentLibraryPage() {
     return new Intl.NumberFormat('zh-CN').format(num)
   }
 
-  // 计算统计数据
-  const totalViews = contents.reduce((sum, content) => sum + content.views, 0)
-  const totalLikes = contents.reduce((sum, content) => sum + content.likes, 0)
-  const avgEngagement = contents.length > 0 ? 
-    contents.reduce((sum, content) => sum + content.engagement_rate, 0) / contents.length : 0
+  // 获取热门程度标签
+  const getHotCategoryBadge = (hotCategory?: string | null) => {
+    const config = {
+      viral: { color: 'red', label: '🔥 爆文' },
+      trending: { color: 'orange', label: '📈 热门' },
+      normal: { color: 'gray', label: '📝 普通' },
+    }
+    
+    const category = (hotCategory || 'normal') as keyof typeof config
+    const badgeConfig = config[category]
+    return (
+      <Badge colorScheme={badgeConfig.color} variant="subtle" fontSize="xs">
+        {badgeConfig.label}
+      </Badge>
+    )
+  }
 
   return (
     <PageLayout>
@@ -289,37 +222,51 @@ export default function ContentLibraryPage() {
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.1 }}
         >
-          <HStack spacing={6} flexWrap="wrap">
+          <Grid templateColumns="repeat(auto-fit, minmax(200px, 1fr))" gap={6}>
             <StatCard
               title="内容总数"
-              value={contents.length}
+              value={stats?.overview?.total_content || 0}
               icon={RiBookOpenLine}
               iconColor="blue.400"
               loading={loading}
             />
             <StatCard
               title="总浏览量"
-              value={formatNumber(totalViews)}
+              value={formatNumber(stats?.overview?.total_views || 0)}
               icon={RiEyeLine}
               iconColor="green.400"
               loading={loading}
             />
             <StatCard
               title="总点赞数"
-              value={formatNumber(totalLikes)}
+              value={formatNumber(stats?.overview?.total_likes || 0)}
               icon={RiHeartLine}
               iconColor="red.400"
               loading={loading}
             />
             <StatCard
-              title="平均互动率"
-              value={avgEngagement.toFixed(1)}
-              suffix="%"
-              icon={RiLineChartLine}
+              title="总评论数"
+              value={formatNumber(stats?.overview?.total_comments || 0)}
+              icon={RiMessageLine}
               iconColor="purple.400"
               loading={loading}
             />
-          </HStack>
+            <StatCard
+              title="总收藏数"
+              value={formatNumber(stats?.overview?.total_favorites || 0)}
+              icon={RiStarLine}
+              iconColor="yellow.400"
+              loading={loading}
+            />
+            <StatCard
+              title="平均互动率"
+              value={(stats?.overview?.avg_engagement_rate || 0).toFixed(1)}
+              suffix="%"
+              icon={RiLineChartLine}
+              iconColor="orange.400"
+              loading={loading}
+            />
+          </Grid>
         </MotionBox>
 
         {/* 搜索和筛选 */}
@@ -336,7 +283,7 @@ export default function ContentLibraryPage() {
                     <RiSearchLine color="gray.400" />
                   </InputLeftElement>
                   <Input
-                    placeholder="搜索标题、内容或标签..."
+                    placeholder="搜索标题、内容、作者..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -348,6 +295,9 @@ export default function ContentLibraryPage() {
                   <option value="美妆">美妆</option>
                   <option value="居家">居家</option>
                   <option value="健康">健康</option>
+                  <option value="美食">美食</option>
+                  <option value="旅行">旅行</option>
+                  <option value="科技">科技</option>
                 </Select>
 
                 <Select maxW="150px" value={platformFilter} onChange={(e) => setPlatformFilter(e.target.value)}>
@@ -355,7 +305,25 @@ export default function ContentLibraryPage() {
                   <option value="小红书">小红书</option>
                   <option value="抖音">抖音</option>
                   <option value="微博">微博</option>
+                  <option value="B站">B站</option>
+                  <option value="Instagram">Instagram</option>
                 </Select>
+
+                <Select maxW="120px" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                  <option value="all">全部状态</option>
+                  <option value="published">已发布</option>
+                  <option value="draft">草稿</option>
+                  <option value="archived">已归档</option>
+                </Select>
+
+                <Button
+                  leftIcon={<RiUploadLine />}
+                  onClick={onImportOpen}
+                  colorScheme="green"
+                  variant="outline"
+                >
+                  导入数据
+                </Button>
 
                 <Button
                   leftIcon={<RiAddLine />}
@@ -427,9 +395,9 @@ export default function ContentLibraryPage() {
                   <Card hover>
                     <VStack align="start" spacing={4}>
                       {/* 缩略图 */}
-                      {content.thumbnail && (
+                      {content.thumbnail_url && (
                         <Image
-                          src={content.thumbnail}
+                          src={content.thumbnail_url}
                           alt={content.title}
                           borderRadius="md"
                           w="full"
@@ -440,7 +408,7 @@ export default function ContentLibraryPage() {
 
                       <Flex justify="space-between" w="full" align="start">
                         <VStack align="start" spacing={2} flex={1}>
-                          <HStack>
+                          <HStack spacing={2} flexWrap="wrap">
                             <Badge colorScheme="blue" variant="subtle">
                               {content.category}
                             </Badge>
@@ -448,10 +416,19 @@ export default function ContentLibraryPage() {
                               {content.platform}
                             </Badge>
                             {getStatusBadge(content.status)}
+                            {getHotCategoryBadge(content.hot_category)}
                           </HStack>
+                          
                           <Text fontWeight="bold" fontSize="md" noOfLines={2}>
                             {content.title}
                           </Text>
+                          
+                          {content.author && (
+                            <Text color="gray.400" fontSize="xs">
+                              @{content.author}
+                            </Text>
+                          )}
+                          
                           <Text color="gray.500" fontSize="sm" noOfLines={3}>
                             {content.content}
                           </Text>
@@ -507,13 +484,13 @@ export default function ContentLibraryPage() {
                       </Wrap>
 
                       {/* 数据统计 */}
-                      <Grid templateColumns="repeat(4, 1fr)" gap={2} w="full">
+                      <Grid templateColumns="repeat(5, 1fr)" gap={2} w="full">
                         <VStack spacing={1}>
                           <Text fontSize="xs" color="gray.400">浏览</Text>
                           <HStack spacing={1}>
                             <RiEyeLine size="12px" color="gray.400" />
                             <Text fontSize="xs" fontWeight="semibold">
-                              {formatNumber(content.views)}
+                              {formatNumber(content.views_count)}
                             </Text>
                           </HStack>
                         </VStack>
@@ -522,16 +499,25 @@ export default function ContentLibraryPage() {
                           <HStack spacing={1}>
                             <RiHeartLine size="12px" color="red.400" />
                             <Text fontSize="xs" fontWeight="semibold">
-                              {formatNumber(content.likes)}
+                              {formatNumber(content.likes_count)}
                             </Text>
                           </HStack>
                         </VStack>
                         <VStack spacing={1}>
-                          <Text fontSize="xs" color="gray.400">分享</Text>
+                          <Text fontSize="xs" color="gray.400">评论</Text>
                           <HStack spacing={1}>
-                            <RiShareLine size="12px" color="blue.400" />
+                            <RiMessageLine size="12px" color="purple.400" />
                             <Text fontSize="xs" fontWeight="semibold">
-                              {formatNumber(content.shares)}
+                              {formatNumber(content.comments_count)}
+                            </Text>
+                          </HStack>
+                        </VStack>
+                        <VStack spacing={1}>
+                          <Text fontSize="xs" color="gray.400">收藏</Text>
+                          <HStack spacing={1}>
+                            <RiStarLine size="12px" color="yellow.400" />
+                            <Text fontSize="xs" fontWeight="semibold">
+                              {formatNumber(content.favorites_count)}
                             </Text>
                           </HStack>
                         </VStack>
@@ -540,15 +526,22 @@ export default function ContentLibraryPage() {
                           <HStack spacing={1}>
                             <RiFireLine size="12px" color="orange.400" />
                             <Text fontSize="xs" fontWeight="semibold">
-                              {content.engagement_rate}%
+                              {content.engagement_rate.toFixed(1)}%
                             </Text>
                           </HStack>
                         </VStack>
                       </Grid>
 
-                      <Text fontSize="xs" color="gray.400">
-                        更新时间: {formatDate(content.updated_at)}
-                      </Text>
+                      <HStack justify="space-between" w="full">
+                        <Text fontSize="xs" color="gray.400">
+                          创建: {formatDate(content.created_at)}
+                        </Text>
+                        {content.published_at && (
+                          <Text fontSize="xs" color="gray.400">
+                            发布: {formatDate(content.published_at)}
+                          </Text>
+                        )}
+                      </HStack>
                     </VStack>
                   </Card>
                 </MotionBox>
@@ -654,14 +647,26 @@ export default function ContentLibraryPage() {
                   {selectedContent.title}
                 </Text>
                 
-                {selectedContent.thumbnail && (
+                {selectedContent.author && (
+                  <Text color="gray.500" fontSize="md">
+                    作者: @{selectedContent.author}
+                  </Text>
+                )}
+                
+                {selectedContent.thumbnail_url && (
                   <Image
-                    src={selectedContent.thumbnail}
+                    src={selectedContent.thumbnail_url}
                     alt={selectedContent.title}
                     borderRadius="md"
                     maxH="200px"
                     objectFit="cover"
                   />
+                )}
+                
+                {selectedContent.description && (
+                  <Text color="gray.600" fontSize="md" fontStyle="italic">
+                    {selectedContent.description}
+                  </Text>
                 )}
                 
                 <Text whiteSpace="pre-wrap" lineHeight="1.6">
@@ -671,24 +676,41 @@ export default function ContentLibraryPage() {
                 <Box>
                   <Text fontSize="sm" fontWeight="semibold" mb={2}>标签:</Text>
                   <Wrap>
-                    {selectedContent.tags.map(tag => (
+                    {selectedContent.tags?.map(tag => (
                       <WrapItem key={tag}>
                         <Tag size="sm" colorScheme="blue" variant="subtle">
                           {tag}
                         </Tag>
                       </WrapItem>
-                    ))}
+                    )) || []}
                   </Wrap>
                 </Box>
+                
+                {selectedContent.keywords && selectedContent.keywords.length > 0 && (
+                  <Box>
+                    <Text fontSize="sm" fontWeight="semibold" mb={2}>关键词:</Text>
+                    <Wrap>
+                      {selectedContent.keywords.map(keyword => (
+                        <WrapItem key={keyword}>
+                          <Tag size="sm" colorScheme="green" variant="outline">
+                            {keyword}
+                          </Tag>
+                        </WrapItem>
+                      ))}
+                    </Wrap>
+                  </Box>
+                )}
                 
                 <Grid templateColumns="repeat(2, 1fr)" gap={4}>
                   <VStack align="start">
                     <Text fontSize="sm" color="gray.500">数据统计</Text>
                     <VStack align="start" spacing={1}>
-                      <Text fontSize="sm">浏览量: {formatNumber(selectedContent.views)}</Text>
-                      <Text fontSize="sm">点赞数: {formatNumber(selectedContent.likes)}</Text>
-                      <Text fontSize="sm">分享数: {formatNumber(selectedContent.shares)}</Text>
-                      <Text fontSize="sm">互动率: {selectedContent.engagement_rate}%</Text>
+                      <Text fontSize="sm">浏览量: {formatNumber(selectedContent.views_count)}</Text>
+                      <Text fontSize="sm">点赞数: {formatNumber(selectedContent.likes_count)}</Text>
+                      <Text fontSize="sm">评论数: {formatNumber(selectedContent.comments_count)}</Text>
+                      <Text fontSize="sm">收藏数: {formatNumber(selectedContent.favorites_count)}</Text>
+                      <Text fontSize="sm">分享数: {formatNumber(selectedContent.shares_count)}</Text>
+                      <Text fontSize="sm">互动率: {selectedContent.engagement_rate.toFixed(1)}%</Text>
                     </VStack>
                   </VStack>
                   <VStack align="start">
@@ -696,9 +718,43 @@ export default function ContentLibraryPage() {
                     <VStack align="start" spacing={1}>
                       <Text fontSize="sm">创建时间: {formatDate(selectedContent.created_at)}</Text>
                       <Text fontSize="sm">更新时间: {formatDate(selectedContent.updated_at)}</Text>
+                      {selectedContent.published_at && (
+                        <Text fontSize="sm">发布时间: {formatDate(selectedContent.published_at)}</Text>
+                      )}
                     </VStack>
                   </VStack>
                 </Grid>
+
+                {selectedContent.top_comments && selectedContent.top_comments.length > 0 && (
+                  <Box>
+                    <Text fontSize="sm" fontWeight="semibold" mb={2}>热门评论:</Text>
+                    <VStack align="start" spacing={2}>
+                      {selectedContent.top_comments.slice(0, 3).map((comment, index) => (
+                        <Box key={index} p={3} bg="gray.50" borderRadius="md" w="full">
+                          <HStack justify="space-between">
+                            <Text fontSize="sm" fontWeight="semibold">@{comment.author}</Text>
+                            <HStack spacing={1}>
+                              <RiHeartLine size="12px" />
+                              <Text fontSize="xs">{comment.likes}</Text>
+                            </HStack>
+                          </HStack>
+                          <Text fontSize="sm" mt={1}>{comment.content}</Text>
+                        </Box>
+                      ))}
+                    </VStack>
+                  </Box>
+                )}
+
+                {selectedContent.source_url && (
+                  <Box>
+                    <Text fontSize="sm" color="gray.500">
+                      原文链接: 
+                      <Text as="a" href={selectedContent.source_url} target="_blank" color="blue.500" ml={1}>
+                        查看原文
+                      </Text>
+                    </Text>
+                  </Box>
+                )}
               </VStack>
             )}
           </ModalBody>
@@ -707,6 +763,15 @@ export default function ContentLibraryPage() {
           </ModalFooter>
         </ModalContent>
       </Modal>
+
+      {/* 导入数据模态框 */}
+      <ImportModal
+        isOpen={isImportOpen}
+        onClose={onImportClose}
+        onImport={importContents}
+        onDownloadTemplate={downloadTemplate}
+        isLoading={importLoading}
+      />
     </PageLayout>
   )
 }

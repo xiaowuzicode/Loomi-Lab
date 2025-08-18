@@ -84,6 +84,19 @@ cp env.local.example .env.local
 npm run dev
 ```
 
+# 直接后台运行
+nohup ./start.sh > app.log 2>&1 &
+
+# 查看日志
+tail -f app.log
+
+# 查看进程
+ps aux | grep node
+
+# 停止进程（找到进程ID后）
+kill <进程ID>
+
+
 访问 [http://localhost:3000](http://localhost:3000) 查看应用。
 
 ## 📱 页面功能

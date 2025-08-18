@@ -22,8 +22,14 @@ function getMilvusConfig(env: MilvusEnvironment = 'local') {
       }
     default: // 'local'
       // 本地Docker配置
+      const endpoint = process.env.MILVUS_ENDPOINT || 'localhost:19530'
+      // 确保地址格式正确
+      const address = endpoint.startsWith('http://') || endpoint.startsWith('https://') 
+        ? endpoint 
+        : `http://${endpoint}`
+      
       return {
-        address: process.env.MILVUS_ENDPOINT || 'http://127.0.0.1:19530',
+        address,
         // 本地 Milvus 通常不需要认证，但可以配置token
         ...(process.env.MILVUS_USERNAME && process.env.MILVUS_PASSWORD ? {
           token: `${process.env.MILVUS_USERNAME}:${process.env.MILVUS_PASSWORD}`,
@@ -216,6 +222,15 @@ export class MilvusService {
     }[]
   ): Promise<boolean> {
     try {
+      console.log(`📝 准备插入 ${documents.length} 个文档到集合 ${collectionName}`)
+      
+      // 验证数据
+      const validationResult = this.validateDocuments(documents)
+      if (!validationResult.valid) {
+        console.error('❌ 文档验证失败:', validationResult.errors)
+        return false
+      }
+
       const data = documents.map(doc => ({
         id: doc.id,
         vector: doc.vector,
@@ -226,12 +241,25 @@ export class MilvusService {
       }))
 
       const client = this.initClient()
+      
+      // 检查集合是否存在
+      const hasCollection = await client.hasCollection({
+        collection_name: collectionName,
+      })
+      
+      if (!hasCollection.value) {
+        console.error(`❌ 集合 ${collectionName} 不存在`)
+        return false
+      }
+
+      console.log(`🚀 开始插入数据到 ${collectionName}...`)
       const insertRes = await client.insert({
         collection_name: collectionName,
         data: data,
       })
 
       if (insertRes.status.error_code === ErrorCode.SUCCESS) {
+        console.log(`💾 开始刷新数据到持久化存储...`)
         // 刷新数据到持久化存储
         await client.flush({
           collection_names: [collectionName],
@@ -241,12 +269,58 @@ export class MilvusService {
         return true
       }
 
-      console.error(`❌ 插入文档失败: ${insertRes.status.reason}`)
+      console.error(`❌ 插入文档失败: ${insertRes.status.reason} (错误码: ${insertRes.status.error_code})`)
       return false
     } catch (error) {
-      console.error('❌ 插入文档异常:', error)
+      console.error(`❌ 插入文档到 ${collectionName} 异常:`, error)
+      
+      // 详细错误信息
+      if (error instanceof Error) {
+        console.error('错误详情:', {
+          message: error.message,
+          stack: error.stack?.split('\n').slice(0, 5).join('\n')
+        })
+      }
       return false
     }
+  }
+
+  /**
+   * 验证文档数据格式
+   */
+  private validateDocuments(documents: any[]): { valid: boolean; errors: string[] } {
+    const errors: string[] = []
+    
+    if (!Array.isArray(documents) || documents.length === 0) {
+      errors.push('文档列表不能为空')
+      return { valid: false, errors }
+    }
+    
+    for (let i = 0; i < documents.length; i++) {
+      const doc = documents[i]
+      
+      if (!doc.id || typeof doc.id !== 'string') {
+        errors.push(`文档 ${i}: ID必须是非空字符串`)
+      }
+      
+      if (!Array.isArray(doc.vector) || doc.vector.length === 0) {
+        errors.push(`文档 ${i}: 向量必须是非空数组`)
+      }
+      
+      if (doc.vector && doc.vector.length !== 1536) {
+        errors.push(`文档 ${i}: 向量维度应为 1536，实际为 ${doc.vector?.length}`)
+      }
+      
+      if (!doc.text || typeof doc.text !== 'string') {
+        errors.push(`文档 ${i}: 文本内容不能为空`)
+      }
+      
+      if (!doc.source || typeof doc.source !== 'string') {
+        errors.push(`文档 ${i}: 来源不能为空`)
+      }
+    }
+    
+    return { valid: errors.length === 0, errors }
   }
 
   /**

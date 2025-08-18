@@ -40,32 +40,43 @@ interface ProcessedXiaohongshuPost {
  * 小红书数据处理服务
  */
 export class XiaohongshuMilvusService {
-  private collectionName = 'lab_xiaohongshu_posts'
+  private collectionName: string
+  private milvusService: any // MilvusService实例
+
+  constructor(milvusService?: any, collectionName: string = 'lab_xiaohongshu_posts') {
+    this.milvusService = milvusService || require('./milvus').milvusService
+    this.collectionName = collectionName
+  }
 
   /**
    * 初始化小红书集合
    */
   async initializeCollection(): Promise<boolean> {
     try {
+      console.log(`🏗️ 开始初始化小红书集合: ${this.collectionName}`)
+      
       // 检查连接
-      const connected = await milvusService.connect()
+      const connected = await this.milvusService.connect()
       if (!connected) {
-        throw new Error('Milvus连接失败')
+        console.error('❌ Milvus连接失败')
+        return false
       }
 
       // 创建专用集合
-      const success = await milvusService.createKnowledgeBaseCollection(
+      const success = await this.milvusService.createKnowledgeBaseCollection(
         this.collectionName,
         1536 // OpenAI text-embedding-ada-002 维度
       )
 
       if (success) {
-        console.log('✅ 小红书数据集合初始化成功')
+        console.log(`✅ 小红书数据集合 ${this.collectionName} 初始化成功`)
+      } else {
+        console.error(`❌ 小红书数据集合 ${this.collectionName} 初始化失败`)
       }
 
       return success
     } catch (error) {
-      console.error('❌ 初始化小红书集合失败:', error)
+      console.error(`❌ 初始化小红书集合 ${this.collectionName} 异常:`, error)
       return false
     }
   }
@@ -198,7 +209,7 @@ export class XiaohongshuMilvusService {
       }))
 
       // 插入到Milvus
-      const success = await milvusService.insertDocuments(this.collectionName, milvusDocuments)
+      const success = await this.milvusService.insertDocuments(this.collectionName, milvusDocuments)
 
       if (success) {
         console.log(`🎉 成功插入 ${processedPosts.length} 个小红书帖子到向量数据库`)
@@ -355,14 +366,14 @@ export class XiaohongshuMilvusService {
     try {
       const queryVector = await this.generateEmbedding(query)
       
-      const results = await milvusService.searchSimilarDocuments(
+      const results = await this.milvusService.searchSimilarDocuments(
         this.collectionName,
         queryVector,
         topK,
         minScore
       )
 
-      return results.map(result => ({
+      return results.map((result: any) => ({
         id: result.id,
         score: result.score,
         title: result.metadata.title,
@@ -388,13 +399,13 @@ export class XiaohongshuMilvusService {
    */
   async getStats() {
     try {
-      return await milvusService.getCollectionStats(this.collectionName)
+      return await this.milvusService.getCollectionStats(this.collectionName)
     } catch (error) {
-      console.error('❌ 获取统计信息失败:', error)
+      console.error(`❌ 获取集合 ${this.collectionName} 统计信息失败:`, error)
       return null
     }
   }
 }
 
-// 导出全局实例
-export const xiaohongshuMilvusService = new XiaohongshuMilvusService()
+// 导出全局实例（向后兼容）
+export const xiaohongshuMilvusService = new XiaohongshuMilvusService(milvusService)

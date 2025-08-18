@@ -141,6 +141,7 @@ export default function KnowledgeBaseV2Page() {
   const { isOpen: isRebuildIndexOpen, onOpen: onRebuildIndexOpen, onClose: onRebuildIndexClose } = useDisclosure()
   const { isOpen: isClearKBOpen, onOpen: onClearKBOpen, onClose: onClearKBClose } = useDisclosure()  
   const { isOpen: isDeleteKBOpen, onOpen: onDeleteKBOpen, onClose: onDeleteKBClose } = useDisclosure()
+  const { isOpen: isDiagnosisOpen, onOpen: onDiagnosisOpen, onClose: onDiagnosisClose } = useDisclosure()
   
   // 表单状态
   const [newKBName, setNewKBName] = useState('')
@@ -150,6 +151,7 @@ export default function KnowledgeBaseV2Page() {
   const [similarity, setSimilarity] = useState(0.01)
   const [ragLoading, setRagLoading] = useState(false)
   const [importHistory, setImportHistory] = useState<ImportRecord[]>([])
+  const [diagnosisResult, setDiagnosisResult] = useState<any>(null)
 
   // 获取导入历史
   const fetchImportHistory = useCallback(async (collectionName?: string) => {
@@ -762,6 +764,46 @@ export default function KnowledgeBaseV2Page() {
     }
   }
 
+  // 运行系统诊断
+  const handleRunDiagnosis = async () => {
+    try {
+      toast({
+        title: '正在运行系统诊断...',
+        description: '这可能需要几秒钟时间',
+        status: 'info',
+        duration: 2000,
+        isClosable: true,
+      })
+
+      const response = await fetch(`/api/diagnosis?env=${currentEnv}`)
+      const result = await response.json()
+      
+      if (result.success) {
+        setDiagnosisResult(result.data)
+        onDiagnosisOpen()
+        
+        const { summary } = result.data
+        toast({
+          title: '系统诊断完成',
+          description: `${summary.passed}/${summary.total} 项测试通过`,
+          status: summary.failed === 0 ? 'success' : 'warning',
+          duration: 3000,
+          isClosable: true,
+        })
+      } else {
+        throw new Error(result.error || '诊断失败')
+      }
+    } catch (error) {
+      toast({
+        title: '系统诊断失败',
+        description: error instanceof Error ? error.message : '未知错误',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+    }
+  }
+
   return (
     <PageLayout>
       <VStack spacing={4} align="stretch">
@@ -907,12 +949,27 @@ export default function KnowledgeBaseV2Page() {
                         icon={<RiRefreshLine />}
                         variant="ghost"
                         aria-label="刷新"
+                        onClick={() => {
+                          fetchKnowledgeBases()
+                          fetchImportHistory()
+                        }}
                       />
-                      <IconButton
-                        icon={<RiSettingsLine />}
-                        variant="ghost"
-                        aria-label="设置"
-                      />
+                      <Menu>
+                        <MenuButton
+                          as={IconButton}
+                          icon={<RiSettingsLine />}
+                          variant="ghost"
+                          aria-label="设置"
+                        />
+                        <MenuList>
+                          <MenuItem 
+                            icon={<RiAlertLine />}
+                            onClick={handleRunDiagnosis}
+                          >
+                            系统诊断
+                          </MenuItem>
+                        </MenuList>
+                      </Menu>
                     </HStack>
                   </HStack>
                 </Box>
@@ -1509,6 +1566,102 @@ export default function KnowledgeBaseV2Page() {
               确定删除
             </Button>
             <Button onClick={onDeleteKBClose}>取消</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* 系统诊断结果对话框 */}
+      <Modal isOpen={isDiagnosisOpen} onClose={onDiagnosisClose} size="xl">
+        <ModalOverlay />
+        <ModalContent maxH="80vh" overflowY="auto">
+          <ModalHeader>
+            <HStack>
+              <RiAlertLine color="blue" />
+              <Text>系统诊断报告</Text>
+              {diagnosisResult && (
+                <Badge 
+                  colorScheme={diagnosisResult.summary.failed === 0 ? 'green' : 'orange'}
+                  variant="subtle"
+                >
+                  {diagnosisResult.summary.passed}/{diagnosisResult.summary.total} 通过
+                </Badge>
+              )}
+            </HStack>
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            {diagnosisResult && (
+              <VStack align="stretch" spacing={4}>
+                <Box p={3} bg={colors.bg} borderRadius="md">
+                  <Text fontSize="sm" color="gray.600" mb={2}>
+                    环境: {diagnosisResult.environment === 'local' ? '本地' : diagnosisResult.environment === 'hosted' ? '托管' : '阿里云'} 
+                    | 时间: {new Date(diagnosisResult.timestamp).toLocaleString('zh-CN')}
+                  </Text>
+                  <HStack spacing={4}>
+                    <HStack>
+                      <Box w="3" h="3" borderRadius="50%" bg="green.500" />
+                      <Text fontSize="sm">通过: {diagnosisResult.summary.passed}</Text>
+                    </HStack>
+                    <HStack>
+                      <Box w="3" h="3" borderRadius="50%" bg="red.500" />
+                      <Text fontSize="sm">失败: {diagnosisResult.summary.failed}</Text>
+                    </HStack>
+                    <HStack>
+                      <Box w="3" h="3" borderRadius="50%" bg="orange.500" />
+                      <Text fontSize="sm">警告: {diagnosisResult.summary.warnings}</Text>
+                    </HStack>
+                  </HStack>
+                </Box>
+
+                {diagnosisResult.tests.map((test: any, index: number) => (
+                  <Box key={index} p={4} border="1px" borderColor={colors.border} borderRadius="md">
+                    <HStack justify="space-between" mb={3}>
+                      <Text fontWeight="semibold">{test.name}</Text>
+                      <Badge 
+                        colorScheme={
+                          test.status === 'passed' ? 'green' : 
+                          test.status === 'failed' ? 'red' : 'orange'
+                        }
+                      >
+                        {test.status === 'passed' ? '通过' : test.status === 'failed' ? '失败' : '警告'}
+                      </Badge>
+                    </HStack>
+                    
+                    {test.details && Object.keys(test.details).length > 0 && (
+                      <Box mb={3}>
+                        <Text fontSize="sm" fontWeight="medium" mb={2}>详细信息:</Text>
+                        <Box fontSize="sm" color="gray.600">
+                          {typeof test.details === 'object' ? (
+                            <pre style={{ whiteSpace: 'pre-wrap', fontSize: '12px' }}>
+                              {JSON.stringify(test.details, null, 2)}
+                            </pre>
+                          ) : (
+                            <Text>{test.details}</Text>
+                          )}
+                        </Box>
+                      </Box>
+                    )}
+                    
+                    {test.recommendations && test.recommendations.length > 0 && (
+                      <Box>
+                        <Text fontSize="sm" fontWeight="medium" mb={2}>建议:</Text>
+                        <VStack align="start" spacing={1}>
+                          {test.recommendations.map((rec: string, recIndex: number) => (
+                            <HStack key={recIndex} align="start">
+                              <Text fontSize="xs" color="gray.500">•</Text>
+                              <Text fontSize="sm" color="gray.600">{rec}</Text>
+                            </HStack>
+                          ))}
+                        </VStack>
+                      </Box>
+                    )}
+                  </Box>
+                ))}
+              </VStack>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button onClick={onDiagnosisClose}>关闭</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

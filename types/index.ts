@@ -75,16 +75,87 @@ export interface ContentItem {
   id: string
   title: string
   content: string
+  description?: string
+  author?: string
+  source_url?: string
+  
+  // 分类和平台
   category: string
+  platform: string
+  hot_category?: 'viral' | 'trending' | 'normal' | null
+  status: 'published' | 'draft' | 'archived'
+  
+  // 媒体资源
+  thumbnail_url?: string
+  images_urls: string[]
+  video_url?: string
+  
+  // 数据统计
+  views_count: number
+  likes_count: number
+  shares_count: number
+  comments_count: number
+  favorites_count: number
+  engagement_rate: number
+  
+  // 评论数据
+  top_comments: TopComment[]
+  
+  // 标签和关键词
   tags: string[]
-  performance: {
-    views: number
-    likes: number
-    shares: number
-    engagement: number
-  }
-  createdAt: Date
-  updatedAt: Date
+  keywords: string[]
+  
+  // 时间字段
+  published_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface TopComment {
+  id?: string
+  author: string
+  content: string
+  likes: number
+  created_at?: string
+}
+
+// 内容导入相关
+export interface ContentImportItem {
+  title: string
+  content: string
+  description?: string
+  author?: string
+  source_url?: string
+  category: string
+  platform: string
+  hot_category?: 'viral' | 'trending' | 'normal'
+  status?: 'published' | 'draft' | 'archived'
+  thumbnail_url?: string
+  images_urls?: string[]
+  video_url?: string
+  views_count?: number
+  likes_count?: number
+  shares_count?: number
+  comments_count?: number
+  favorites_count?: number
+  engagement_rate?: number
+  top_comments?: TopComment[]
+  tags?: string[]
+  keywords?: string[]
+  published_at?: string
+}
+
+export interface ContentImportRequest {
+  items: ContentImportItem[]
+  override_existing?: boolean
+}
+
+export interface ContentImportResult {
+  total: number
+  success: number
+  failed: number
+  errors: string[]
+  imported_items: string[]
 }
 
 // 提示词相关

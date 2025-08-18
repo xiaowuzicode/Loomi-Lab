@@ -17,23 +17,57 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
-# 检查端口占用
-PORT=3000
-while lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null ; do
+# 端口与日志配置
+PORT=${PORT:-3000}
+LOG_FILE="app.log"
+PID_FILE="loomi.pid"
+
+# 检查端口占用（兼容 lsof/ss/netstat）
+port_in_use() {
+    local p="$1"
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -Pi :"$p" -sTCP:LISTEN -t >/dev/null
+        return $?
+    elif command -v ss >/dev/null 2>&1; then
+        ss -ltn | awk '{print $4}' | grep -q ":$p$"
+        return $?
+    elif command -v netstat >/dev/null 2>&1; then
+        netstat -ltn 2>/dev/null | awk '{print $4}' | grep -q ":$p$"
+        return $?
+    else
+        return 1
+    fi
+}
+
+while port_in_use "$PORT" ; do
     echo "⚠️  端口 $PORT 已被占用，尝试端口 $((PORT+1))"
     PORT=$((PORT+1))
 done
 
-echo "🌐 启动开发服务器..."
-echo "📍 访问地址: http://localhost:$PORT"
-echo "📊 仪表板: http://localhost:$PORT/dashboard"
-echo "🔐 登录页面: http://localhost:$PORT/login"
+PUBLIC_IP=$(curl -s --max-time 2 ifconfig.me || true)
+PRIVATE_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+
+echo "🌐 启动开发服务器 (后台运行)..."
+if [ -n "$PUBLIC_IP" ]; then
+    echo "📍 公网访问: http://$PUBLIC_IP:$PORT"
+else
+    echo "📍 公网访问: http://<你的云服务器公网IP>:$PORT"
+fi
+if [ -n "$PRIVATE_IP" ]; then
+    echo "📍 内网访问: http://$PRIVATE_IP:$PORT"
+fi
+echo "📍 本机: http://localhost:$PORT"
+echo "📊 仪表板: http://<IP或域名>:$PORT/dashboard"
+echo "🔐 登录页面: http://<IP或域名>:$PORT/login"
 echo ""
 echo "💡 提示："
-echo "   - 按 Ctrl+C 停止服务器"
+echo "   - 日志文件: $LOG_FILE (使用 'tail -f $LOG_FILE' 查看)"
+echo "   - 进程 PID 文件: $PID_FILE (使用 'kill \$(cat $PID_FILE)' 停止)"
 echo "   - 修改代码后会自动热重载"
 echo "   - 默认使用深色主题"
 echo ""
 
-# 启动 Next.js 开发服务器
-npm run dev
+# 启动 Next.js 开发服务器（绑定 0.0.0.0，并后台运行）
+nohup npm run dev -- -H 0.0.0.0 -p "$PORT" >> "$LOG_FILE" 2>&1 &
+echo $! > "$PID_FILE"
+echo "✅ 已后台启动，PID: $(cat "$PID_FILE")"
