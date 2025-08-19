@@ -184,12 +184,41 @@ EXCEPTION
 END;
 $$;
 
+-- 6. Lab平台：获取搜索结果的总数
+CREATE OR REPLACE FUNCTION lab_get_search_users_count(search_term TEXT DEFAULT '')
+RETURNS INTEGER
+SECURITY DEFINER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    user_count INTEGER;
+BEGIN
+    SELECT COUNT(*)
+    INTO user_count
+    FROM auth.users u
+    WHERE 
+        u.deleted_at IS NULL
+        AND (
+            search_term = '' 
+            OR u.email ILIKE '%' || search_term || '%'
+            OR u.phone ILIKE '%' || search_term || '%'
+            OR u.id::text = search_term
+        );
+    
+    RETURN COALESCE(user_count, 0);
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN 0;
+END;
+$$;
+
 -- 授权给 service_role
 GRANT EXECUTE ON FUNCTION lab_search_users(TEXT, INTEGER, INTEGER) TO service_role;
 GRANT EXECUTE ON FUNCTION lab_get_total_users() TO service_role;
 GRANT EXECUTE ON FUNCTION lab_get_user_by_id(UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION lab_get_user_by_email(TEXT) TO service_role;
 GRANT EXECUTE ON FUNCTION lab_check_user_exists(UUID) TO service_role;
+GRANT EXECUTE ON FUNCTION lab_get_search_users_count(TEXT) TO service_role;
 
 -- 添加注释
 COMMENT ON FUNCTION lab_search_users(TEXT, INTEGER, INTEGER) IS 'Loomi Lab：搜索用户信息，支持邮箱、手机号、用户ID搜索';
@@ -197,3 +226,4 @@ COMMENT ON FUNCTION lab_get_total_users() IS 'Loomi Lab：获取用户总数';
 COMMENT ON FUNCTION lab_get_user_by_id(UUID) IS 'Loomi Lab：根据用户ID获取用户信息';
 COMMENT ON FUNCTION lab_get_user_by_email(TEXT) IS 'Loomi Lab：根据邮箱获取用户信息';
 COMMENT ON FUNCTION lab_check_user_exists(UUID) IS 'Loomi Lab：检查用户是否存在';
+COMMENT ON FUNCTION lab_get_search_users_count(TEXT) IS 'Loomi Lab：获取搜索结果的总数，与lab_search_users使用相同的搜索条件';

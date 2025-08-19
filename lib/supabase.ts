@@ -52,9 +52,23 @@ export class UserStorage {
 
       if (error) throw error
 
-      // 获取总用户数
-      const { data: totalCount, error: countError } = await this.supabase
-        .rpc('lab_get_total_users')
+      // 获取总用户数或搜索结果总数
+      let totalCount = 0
+      let countError = null
+      
+      if (search && search.trim() !== '') {
+        // 有搜索条件时，获取搜索结果总数
+        const { data: searchCount, error: searchCountError } = await this.supabase
+          .rpc('lab_get_search_users_count', { search_term: search })
+        totalCount = searchCount || 0
+        countError = searchCountError
+      } else {
+        // 无搜索条件时，获取总用户数
+        const { data: allCount, error: allCountError } = await this.supabase
+          .rpc('lab_get_total_users')
+        totalCount = allCount || 0
+        countError = allCountError
+      }
 
       if (countError) {
         console.error('获取用户总数失败:', countError)
@@ -91,8 +105,9 @@ export class UserStorage {
       let actualTotal = totalCount || 0
       let actualTotalPages = Math.ceil(actualTotal / limit)
       
-      // 如果有过滤条件，估算过滤后的总数
-      if ((hasStatusFilter || hasRoleFilter) && users.length > 0) {
+      // 如果有前端过滤条件（status或role），需要估算过滤后的总数
+      // 注意：搜索条件已经在SQL层面处理了，所以不需要重新估算
+      if ((hasStatusFilter || hasRoleFilter) && users.length > 0 && (!search || search.trim() === '')) {
         const originalCount = users.length
         const filteredCount = filteredUsers.length
         const filterRatio = filteredCount / originalCount
@@ -104,6 +119,21 @@ export class UserStorage {
         // 至少要有1页
         if (actualTotalPages === 0 && filteredUsers.length > 0) {
           actualTotalPages = 1
+        }
+      } else if ((hasStatusFilter || hasRoleFilter) && users.length > 0 && search && search.trim() !== '') {
+        // 当同时有搜索条件和过滤条件时，使用当前页的过滤结果作为近似估算
+        const originalCount = users.length
+        const filteredCount = filteredUsers.length
+        
+        if (originalCount > 0) {
+          const filterRatio = filteredCount / originalCount
+          actualTotal = Math.round(actualTotal * filterRatio)
+          actualTotalPages = Math.ceil(actualTotal / limit)
+          
+          // 至少要有1页
+          if (actualTotalPages === 0 && filteredUsers.length > 0) {
+            actualTotalPages = 1
+          }
         }
       }
 
