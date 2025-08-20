@@ -41,7 +41,24 @@ function autoClassifyContent(text: string): string {
   return '生活'
 }
 
-// 获取内容列表
+// 格式转换函数：爆文库格式 -> 小红书向量格式
+function convertToXiaohongshuFormat(content: ContentItem): any {
+  return {
+    title: content.title,
+    content: content.content,
+    audio_url: '', // 爆文库没有音频字段
+    cover_image_url: content.thumbnail_url || (content.images_urls && content.images_urls[0]) || '',
+    video_url: content.video_url || '',
+    likes: content.likes_count,
+    favorites: content.favorites_count,
+    comments: content.comments_count,
+    author: content.author || '',
+    tags: content.tags || [],
+    publish_time: content.published_at || content.created_at
+  }
+}
+
+// 获取内容列表或导出数据
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -53,6 +70,11 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search')
     const sortBy = searchParams.get('sortBy') || 'created_at'
     const sortOrder = searchParams.get('sortOrder') || 'desc'
+    
+    // 新增导出相关参数
+    const isExport = searchParams.get('export') === 'true'
+    const exportFormat = searchParams.get('format') || 'original' // original, xiaohongshu
+    const exportLimit = parseInt(searchParams.get('exportLimit') || '1000') // 导出限制
 
     let query = supabaseServiceRole
       .from('lab_content_library')
@@ -77,26 +99,58 @@ export async function GET(request: NextRequest) {
     // 排序
     query = query.order(sortBy, { ascending: sortOrder === 'asc' })
 
-    // 分页
-    const from = (page - 1) * limit
-    query = query.range(from, from + limit - 1)
+    if (isExport) {
+      // 导出模式：获取所有数据（限制最大数量）
+      query = query.range(0, exportLimit - 1)
+      
+      const { data, error } = await query
 
-    const { data, error, count } = await query
-
-    if (error) {
-      throw error
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        items: data || [],
-        total: count || 0,
-        page,
-        limit,
-        totalPages: Math.ceil((count || 0) / limit)
+      if (error) {
+        throw error
       }
-    })
+
+      let exportData: any[] = data || []
+
+      // 根据格式进行转换
+      if (exportFormat === 'xiaohongshu') {
+        exportData = exportData.map(item => convertToXiaohongshuFormat(item))
+      }
+
+      // 生成文件名
+      const timestamp = new Date().toISOString().split('T')[0]
+      const formatName = exportFormat === 'xiaohongshu' ? '小红书向量格式' : '爆文库格式'
+      const filename = `爆文库导出_${formatName}_${timestamp}.json`
+
+      return new NextResponse(JSON.stringify(exportData, null, 2), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
+          'X-Export-Count': exportData.length.toString(),
+          'X-Export-Format': exportFormat
+        }
+      })
+    } else {
+      // 正常分页模式
+      const from = (page - 1) * limit
+      query = query.range(from, from + limit - 1)
+
+      const { data, error, count } = await query
+
+      if (error) {
+        throw error
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          items: data || [],
+          total: count || 0,
+          page,
+          limit,
+          totalPages: Math.ceil((count || 0) / limit)
+        }
+      })
+    }
 
   } catch (error) {
     console.error('Get content library error:', error)

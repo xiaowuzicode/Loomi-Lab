@@ -305,6 +305,91 @@ export function useContentLibrary(options: UseContentLibraryOptions = {}) {
     }
   }, [toast])
 
+  // 导出数据
+  const exportData = useCallback(async (
+    exportFormat: 'original' | 'xiaohongshu' = 'original',
+    filters?: {
+      category?: string
+      platform?: string 
+      status?: string
+      search?: string
+    },
+    exportLimit: number = 1000
+  ) => {
+    try {
+      const params = new URLSearchParams({
+        export: 'true',
+        format: exportFormat,
+        exportLimit: exportLimit.toString(),
+        sortBy: 'created_at',
+        sortOrder: 'desc'
+      })
+
+      // 应用筛选条件
+      if (filters?.category && filters.category !== 'all') {
+        params.append('category', filters.category)
+      }
+      if (filters?.platform && filters.platform !== 'all') {
+        params.append('platform', filters.platform)
+      }
+      if (filters?.status && filters.status !== 'all') {
+        params.append('status', filters.status)
+      }
+      if (filters?.search) {
+        params.append('search', filters.search)
+      }
+
+      const response = await fetch(`/api/content-library?${params}`)
+      
+      if (!response.ok) {
+        throw new Error('导出数据失败')
+      }
+
+      // 获取导出信息
+      const exportCount = response.headers.get('X-Export-Count')
+      const exportFormatType = response.headers.get('X-Export-Format')
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.style.display = 'none'
+      a.href = url
+      
+      // 从response headers获取文件名，或生成默认文件名
+      const contentDisposition = response.headers.get('content-disposition')
+      let filename = `爆文库导出_${new Date().toISOString().split('T')[0]}.json`
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+        if (filenameMatch) {
+          filename = decodeURIComponent(filenameMatch[1].replace(/['"]/g, ''))
+        }
+      }
+      
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      const formatName = exportFormatType === 'xiaohongshu' ? '小红书向量格式' : '爆文库格式'
+      toast({
+        title: '数据导出成功',
+        description: `已导出 ${exportCount} 条数据 (${formatName})`,
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      })
+    } catch (error) {
+      toast({
+        title: '数据导出失败',
+        description: error instanceof Error ? error.message : '未知错误',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    }
+  }, [toast])
+
   // 初始化数据
   useEffect(() => {
     fetchContents()
@@ -330,6 +415,7 @@ export function useContentLibrary(options: UseContentLibraryOptions = {}) {
     deleteContent,
     importContents,
     downloadTemplate,
+    exportData,
     
     // 刷新
     refresh: () => {

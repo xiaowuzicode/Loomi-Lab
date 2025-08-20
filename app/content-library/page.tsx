@@ -80,6 +80,7 @@ export default function ContentLibraryPage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedContent, setSelectedContent] = useState<ContentItem | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [exportFormat, setExportFormat] = useState<'original' | 'xiaohongshu'>('original')
   const { isOpen, onOpen, onClose } = useDisclosure()
   const {
     isOpen: isViewOpen,
@@ -106,6 +107,7 @@ export default function ContentLibraryPage() {
     deleteContent,
     importContents,
     downloadTemplate,
+    exportData,
   } = useContentLibrary({
     page: currentPage,
     limit: 20, // 每页20条
@@ -160,6 +162,18 @@ export default function ContentLibraryPage() {
     } else {
       setSelectedTags(prev => [...prev, tag])
     }
+  }
+
+  // 处理数据导出
+  const handleExportData = async () => {
+    const currentFilters = {
+      category: categoryFilter,
+      platform: platformFilter,
+      status: statusFilter,
+      search: searchTerm
+    }
+    
+    await exportData(exportFormat, currentFilters, 1000)
   }
 
   const getStatusBadge = (status: ContentItem['status']) => {
@@ -348,6 +362,26 @@ export default function ContentLibraryPage() {
                 >
                   导入数据
                 </Button>
+
+                <HStack spacing={2}>
+                  <Select 
+                    maxW="180px" 
+                    value={exportFormat} 
+                    onChange={(e) => setExportFormat(e.target.value as 'original' | 'xiaohongshu')}
+                    size="md"
+                  >
+                    <option value="original">爆文库格式</option>
+                    <option value="xiaohongshu">小红书向量格式</option>
+                  </Select>
+                  <Button
+                    leftIcon={<RiDownloadLine />}
+                    onClick={handleExportData}
+                    colorScheme="blue"
+                    variant="outline"
+                  >
+                    导出数据
+                  </Button>
+                </HStack>
 
                 <Button
                   leftIcon={<RiAddLine />}
