@@ -19,4 +19,5 @@ export const TABLES = {
   XIAOHONGSHU_ACCOUNTS: 'xiaohongshu_accounts',
   XIAOHONGSHU_POSTS: 'xiaohongshu_posts',
   SYSTEM_CONFIGS: 'system_configs',
+  UPLOADED_FILES: 'uploaded_files',
 } as const

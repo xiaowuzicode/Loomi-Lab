@@ -60,11 +60,13 @@ import {
   RiPhoneLine,
   RiCalendarLine,
   RiEyeLine,
+  RiFileTextLine,
 } from 'react-icons/ri'
 import { PageLayout } from '@/components/layout/PageLayout'
 import { Card } from '@/components/ui/Card'
 import { StatCard } from '@/components/ui/StatCard'
 import { useUsers } from '@/hooks/useUsers'
+import { UserFilesModal } from '@/components/users/UserFilesModal'
 
 const MotionBox = motion(Box)
 
@@ -103,6 +105,12 @@ export default function UsersPage() {
     isOpen: isViewOpen,
     onOpen: onViewOpen,
     onClose: onViewClose,
+  } = useDisclosure()
+  
+  const {
+    isOpen: isFilesOpen,
+    onOpen: onFilesOpen,
+    onClose: onFilesClose,
   } = useDisclosure()
   
   const {
@@ -171,6 +179,11 @@ export default function UsersPage() {
     const latestUser = await fetchUserById(user.id)
     setSelectedUser(latestUser || user)
     onViewOpen()
+  }
+
+  const handleViewUserFiles = (user: User) => {
+    setSelectedUser(user)
+    onFilesOpen()
   }
 
   const handleDeleteUser = async (userId: string) => {
@@ -452,6 +465,12 @@ export default function UsersPage() {
                                 onClick={() => handleEditUser(user)}
                               >
                                 编辑用户
+                              </MenuItem>
+                              <MenuItem
+                                icon={<RiFileTextLine />}
+                                onClick={() => handleViewUserFiles(user)}
+                              >
+                                上传的文件
                               </MenuItem>
                               <MenuItem
                                 icon={<RiUserForbidLine />}
@@ -749,6 +768,16 @@ export default function UsersPage() {
           </ModalFooter>
         </ModalContent>
       </Modal>
+
+      {/* 用户文件模态框 */}
+      {selectedUser && (
+        <UserFilesModal
+          isOpen={isFilesOpen}
+          onClose={onFilesClose}
+          userId={selectedUser.id}
+          userName={selectedUser.name}
+        />
+      )}
     </PageLayout>
   )
 }
