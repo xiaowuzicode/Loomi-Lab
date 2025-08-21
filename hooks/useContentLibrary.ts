@@ -25,6 +25,9 @@ interface ContentLibraryStats {
     total_comments: number
     total_favorites: number
     avg_engagement_rate: number
+    vectorized_success?: number
+    vectorized_pending?: number
+    vectorized_failed?: number
   }
   category_stats: Record<string, any>
   platform_stats: Record<string, any>
@@ -39,6 +42,8 @@ export function useContentLibrary(options: UseContentLibraryOptions = {}) {
   const [importLoading, setImportLoading] = useState(false)
   const [totalCount, setTotalCount] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
+  const [vectorizing, setVectorizing] = useState(false)
+  const [vectorProgress, setVectorProgress] = useState<{ processed: number; total: number }>({ processed: 0, total: 0 })
   const toast = useToast()
 
   const {
@@ -115,6 +120,65 @@ export function useContentLibrary(options: UseContentLibraryOptions = {}) {
       })
     }
   }, [toast])
+
+  // 向量化待处理内容（串行分批）
+  const vectorizePending = useCallback(async (env: 'local' | 'hosted' | 'aliyun' = 'local') => {
+    if (vectorizing) return null
+    setVectorizing(true)
+    setVectorProgress({ processed: 0, total: 0 })
+
+    try {
+      // 先获取总量（简单做法：拉一次列表，或后端返回）
+      // 这里直接按批次推进，直到后端返回没有待处理
+      const batchLimit = 200
+      let totalProcessed = 0
+      let totalSuccessful = 0
+      let totalFailed = 0
+
+      while (true) {
+        const res = await fetch(`/api/content-library/vectorize?env=${env}&limit=${batchLimit}`, { method: 'POST' })
+        const result = await res.json()
+        if (!result.success && result.data?.processed === 0) {
+          // 失败且没有处理，直接退出
+          break
+        }
+
+        const processed = result.data?.processed || 0
+        const successful = result.data?.successful || 0
+        const failed = result.data?.failed || 0
+
+        totalProcessed += processed
+        totalSuccessful += successful
+        totalFailed += failed
+
+        setVectorProgress(prev => ({ processed: prev.processed + processed, total: prev.total + processed }))
+
+        // 没有更多待处理
+        if (processed === 0) break
+
+        // 小延迟避免阻塞UI
+        await new Promise(r => setTimeout(r, 200))
+      }
+
+      await fetchContents()
+      await fetchStats()
+
+      toast({
+        title: '向量化完成',
+        description: `处理 ${totalProcessed} 条，成功 ${totalSuccessful} 条，失败 ${totalFailed} 条`,
+        status: totalSuccessful > 0 ? 'success' : 'warning',
+        duration: 4000,
+        isClosable: true,
+      })
+
+      return { totalProcessed, totalSuccessful, totalFailed }
+    } catch (error) {
+      toast({ title: '向量化失败', description: error instanceof Error ? error.message : '未知错误', status: 'error' })
+      return null
+    } finally {
+      setVectorizing(false)
+    }
+  }, [vectorizing, fetchContents, fetchStats, toast])
 
   // 创建内容
   const createContent = useCallback(async (contentData: Partial<ContentItem>) => {
@@ -406,6 +470,8 @@ export function useContentLibrary(options: UseContentLibraryOptions = {}) {
     // 状态
     loading,
     importLoading,
+    vectorizing,
+    vectorProgress,
     
     // 方法
     fetchContents,
@@ -416,6 +482,7 @@ export function useContentLibrary(options: UseContentLibraryOptions = {}) {
     importContents,
     downloadTemplate,
     exportData,
+    vectorizePending,
     
     // 刷新
     refresh: () => {

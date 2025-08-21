@@ -54,7 +54,16 @@ function convertToXiaohongshuFormat(content: ContentItem): any {
     comments: content.comments_count,
     author: content.author || '',
     tags: content.tags || [],
-    publish_time: content.published_at || content.created_at
+    publish_time: content.published_at || content.created_at,
+    // 扩展字段，便于向量库完整召回
+    top_comments: content.top_comments || [],
+    images_urls: content.images_urls || [],
+    thumbnail_url: content.thumbnail_url || '',
+    engagement_rate: content.engagement_rate,
+    source_url: content.source_url || '',
+    platform: content.platform || '',
+    category: content.category || '',
+    keywords: content.keywords || []
   }
 }
 
@@ -200,7 +209,12 @@ export async function POST(request: NextRequest) {
       top_comments: body.top_comments || [],
       tags: body.tags || [],
       keywords: body.keywords || [],
-      published_at: body.published_at ? new Date(body.published_at).toISOString() : null
+      published_at: body.published_at ? new Date(body.published_at).toISOString() : null,
+      // 初始向量化状态
+      vector_status: 'pending',
+      vector_id: null,
+      vector_error: null,
+      last_vectorized_at: null
     }
 
     const { data, error } = await supabaseServiceRole

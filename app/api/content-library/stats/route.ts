@@ -17,7 +17,8 @@ export async function GET(request: NextRequest) {
         status,
         category,
         platform,
-        hot_category
+        hot_category,
+        vector_status
       `)
 
     if (totalError) {
@@ -38,6 +39,10 @@ export async function GET(request: NextRequest) {
       avg_engagement_rate: totalStats.length > 0 
         ? totalStats.reduce((sum, item) => sum + (item.engagement_rate || 0), 0) / totalStats.length 
         : 0,
+      // 向量化统计
+      vectorized_success: totalStats.filter(item => item.vector_status === 'success').length,
+      vectorized_pending: totalStats.filter(item => !item.vector_status || item.vector_status === 'pending').length,
+      vectorized_failed: totalStats.filter(item => item.vector_status === 'failed').length,
     }
 
     // 按分类统计

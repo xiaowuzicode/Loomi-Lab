@@ -6,8 +6,7 @@ export async function POST(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const environment = (searchParams.get('env') || 'local') as MilvusEnvironment
-    
-    const { collectionName, dataType, data } = await request.json()
+    const { collectionName, dataType, data, updateContentVectorStatus } = await request.json()
 
     if (!data || !dataType) {
       return NextResponse.json({
@@ -52,6 +51,18 @@ export async function POST(request: NextRequest) {
     console.log(`📊 导入结果: ${result.success ? '成功' : '失败'}, 导入数量: ${result.importedCount}`)
 
     if (result.success) {
+      // 可选：来自爆文库触发的批量向量化，入库成功后更新对应内容记录状态
+      if (updateContentVectorStatus && Array.isArray(updateContentVectorStatus.ids)) {
+        try {
+          const { supabaseServiceRole } = await import('@/lib/supabase')
+          await supabaseServiceRole
+            .from('lab_content_library')
+            .update({ vector_status: 'success', last_vectorized_at: new Date().toISOString() })
+            .in('id', updateContentVectorStatus.ids)
+        } catch (e) {
+          console.warn('更新内容库向量化状态失败(可忽略):', e)
+        }
+      }
       // 获取统计信息
       const stats = await xiaohongshuService.getStats()
       

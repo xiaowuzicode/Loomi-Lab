@@ -100,6 +100,8 @@ export default function ContentLibraryPage() {
     stats,
     loading,
     importLoading,
+    vectorizing,
+    vectorProgress,
     totalCount,
     totalPages,
     createContent,
@@ -108,6 +110,7 @@ export default function ContentLibraryPage() {
     importContents,
     downloadTemplate,
     exportData,
+    vectorizePending,
   } = useContentLibrary({
     page: currentPage,
     limit: 20, // 每页20条
@@ -293,6 +296,27 @@ export default function ContentLibraryPage() {
               iconColor="orange.400"
               loading={loading}
             />
+            <StatCard
+              title="已向量化数"
+              value={stats?.overview?.vectorized_success || 0}
+              icon={RiFireLine}
+              iconColor="green.500"
+              loading={loading}
+            />
+            <StatCard
+              title="未向量化数"
+              value={stats?.overview?.vectorized_pending || 0}
+              icon={RiFireLine}
+              iconColor="yellow.500"
+              loading={loading}
+            />
+            <StatCard
+              title="向量失败数"
+              value={stats?.overview?.vectorized_failed || 0}
+              icon={RiFireLine}
+              iconColor="red.500"
+              loading={loading}
+            />
           </Grid>
         </MotionBox>
 
@@ -380,6 +404,17 @@ export default function ContentLibraryPage() {
                     variant="outline"
                   >
                     导出数据
+                  </Button>
+                  <Button
+                    leftIcon={<RiFireLine />}
+                    colorScheme="orange"
+                    variant="solid"
+                    isLoading={vectorizing}
+                    loadingText={`向量化中 ${vectorProgress.processed}/${vectorProgress.total || '...'} `}
+                    onClick={() => vectorizePending('hosted')}
+                    isDisabled={vectorizing}
+                  >
+                    向量化未处理
                   </Button>
                 </HStack>
 

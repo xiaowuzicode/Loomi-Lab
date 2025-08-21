@@ -22,32 +22,44 @@
 
 ## 📋 数据结构
 
-### 支持的字段
+### 支持的字段（统一采用“爆文库格式”字段命名）
 ```json
 {
   "title": "标题",
-  "content": "内容", 
-  "audio_url": "音频链接",
-  "cover_image_url": "封面图片链接",
-  "video_url": "视频链接",
-  "likes": 点赞数,
-  "favorites": 收藏数,
-  "comments": 评论数,
+  "content": "内容",
+  "description": "内容摘要",
   "author": "作者",
+  "source_url": "原文链接",
+  "category": "分类",
+  "platform": "平台",
+  "hot_category": "viral|trending|normal",
+  "status": "published|draft|archived",
+  "thumbnail_url": "封面图片URL",
+  "images_urls": ["图片URL1", "图片URL2"],
+  "video_url": "视频URL",
+  "views_count": 0,
+  "likes_count": 0,
+  "shares_count": 0,
+  "comments_count": 0,
+  "favorites_count": 0,
+  "engagement_rate": 0.0,
+  "top_comments": [
+    { "author": "评论者", "content": "评论内容", "likes": 0 }
+  ],
   "tags": ["标签1", "标签2"],
-  "publish_time": "发布时间"
+  "keywords": ["关键词1", "关键词2"],
+  "published_at": "发布时间ISO8601"
 }
 ```
 
-### 向量存储结构
+### 向量存储结构（检索向量 = 标题+正文合并向量）
 ```
 Milvus Collection: lab_xiaohongshu_posts
 ├── id (主键)
-├── title_vector (标题向量, 1536维)
-├── content_vector (内容向量, 存储在metadata中)
-├── text (合并搜索文本)
+├── vector (标题+正文合并向量, 1536维)
+├── text (原文合并文本：title + content)
 ├── source ("xiaohongshu")
-└── metadata (JSON格式完整数据)
+└── metadata (JSON格式完整数据，包含 content_vector 及 top_comments 等扩展字段)
 ```
 
 ## 🛠️ 使用方法
@@ -67,26 +79,27 @@ Milvus Collection: lab_xiaohongshu_posts
 
 ### 第二步：导入数据
 
-#### JSON 格式导入
+#### JSON 格式导入（推荐：爆文库格式数组）
 ```json
 [
   {
     "title": "超简单芝士蛋糕教程",
     "content": "今天分享一个零失败的芝士蛋糕制作方法，只需要5个步骤...",
     "video_url": "https://example.com/video1.mp4",
-    "likes": 1250,
-    "favorites": 380,
-    "comments": 156,
+    "likes_count": 1250,
+    "favorites_count": 380,
+    "comments_count": 156,
     "author": "美食达人小王",
-    "tags": ["美食", "烘焙", "甜品"]
+    "tags": ["美食", "烘焙", "甜品"],
+    "top_comments": [{ "author": "用户A", "content": "太好吃了", "likes": 3 }]
   },
   {
     "title": "三亚旅游攻略",
     "content": "分享我的三亚5日游完整攻略，包含住宿、美食、景点推荐...",
-    "cover_image_url": "https://example.com/cover1.jpg",
-    "likes": 2100,
-    "favorites": 890,
-    "comments": 234
+    "thumbnail_url": "https://example.com/cover1.jpg",
+    "likes_count": 2100,
+    "favorites_count": 890,
+    "comments_count": 234
   }
 ]
 ```
@@ -122,29 +135,29 @@ title,content,video_url,likes,favorites,comments,author,tags
 
 ## 🔧 技术实现细节
 
-### 向量化过程
+### 向量化过程（标题+正文）
 ```mermaid
 graph LR
-    A[原始文本] --> B[OpenAI Embedding API]
+    A[标题+正文合并文本] --> B[OpenAI Embedding API]
     B --> C[1536维向量]
     C --> D[Milvus存储]
     D --> E[ANN索引]
 ```
 
-### 搜索流程
+### 搜索流程（标题+正文向量检索，召回含评论）
 ```mermaid
 graph TB
     A[用户查询] --> B[文本向量化]
-    B --> C[Milvus ANN搜索]
+    B --> C[Milvus ANN搜索 (vector=title+content)]
     C --> D[计算相似度]
     D --> E[返回TopK结果]
     E --> F[结果排序展示]
 ```
 
-### API 架构
+### API 架构（统一JSON格式）
 ```
 /api/xiaohongshu-init    - 集合初始化
-/api/xiaohongshu-import  - 数据导入
+/api/xiaohongshu-import  - 数据导入（接受爆文库格式/兼容旧XHS格式）
 /api/xiaohongshu-search  - ANN搜索
 ```
 

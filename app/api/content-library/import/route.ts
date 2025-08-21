@@ -121,7 +121,12 @@ export async function POST(request: NextRequest) {
           top_comments: item.top_comments || [],
           tags: item.tags || [],
           keywords: item.keywords || [],
-          published_at: item.published_at ? new Date(item.published_at).toISOString() : null
+          published_at: item.published_at ? new Date(item.published_at).toISOString() : null,
+          // 初始向量化状态
+          vector_status: 'pending',
+          vector_id: null,
+          vector_error: null,
+          last_vectorized_at: null
         }
 
         // 插入数据库

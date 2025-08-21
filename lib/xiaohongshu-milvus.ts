@@ -23,6 +23,16 @@ export interface XiaohongshuPost {
   author?: string
   tags?: string[]
   publish_time?: string
+  // 补充：统一爆文库格式后的可选字段
+  top_comments?: Array<{ author: string; content: string; likes?: number }>
+  // 兼容爆文库字段以便写入metadata
+  images_urls?: string[]
+  thumbnail_url?: string
+  engagement_rate?: number
+  source_url?: string
+  platform?: string
+  category?: string
+  keywords?: string[]
 }
 
 /**
@@ -126,7 +136,15 @@ export class XiaohongshuMilvusService {
       comments: Math.max(0, post.comments || 0),
       author: post.author || '',
       tags: Array.isArray(post.tags) ? post.tags : [],
-      publish_time: post.publish_time || new Date().toISOString()
+      publish_time: post.publish_time || new Date().toISOString(),
+      top_comments: Array.isArray(post.top_comments) ? post.top_comments : [],
+      images_urls: Array.isArray(post.images_urls) ? post.images_urls : [],
+      thumbnail_url: post.thumbnail_url || '',
+      engagement_rate: typeof post.engagement_rate === 'number' ? post.engagement_rate : undefined,
+      source_url: post.source_url || '',
+      platform: post.platform || '',
+      category: post.category || '',
+      keywords: Array.isArray(post.keywords) ? post.keywords : []
     }
   }
 
@@ -137,15 +155,17 @@ export class XiaohongshuMilvusService {
     try {
       const cleanedPost = this.preprocessPost(post)
 
-      // 生成向量
-      const [titleVector, contentVector] = await Promise.all([
-        this.generateEmbedding(cleanedPost.title),
+      // 生成向量：使用 标题+正文 作为主检索向量
+      const combinedText = `${cleanedPost.title} ${cleanedPost.content}`.trim()
+      const [combinedVector, contentVector] = await Promise.all([
+        this.generateEmbedding(combinedText),
         this.generateEmbedding(cleanedPost.content)
       ])
 
       return {
         id: cleanedPost.id!,
-        title_vector: titleVector,
+        // 为了减少改动，沿用字段名，但含义更新为：标题+正文合并向量
+        title_vector: combinedVector,
         content_vector: contentVector,
         metadata: {
           title: cleanedPost.title,
@@ -158,7 +178,16 @@ export class XiaohongshuMilvusService {
           comments: cleanedPost.comments,
           author: cleanedPost.author,
           tags: cleanedPost.tags,
-          publish_time: cleanedPost.publish_time
+          publish_time: cleanedPost.publish_time,
+          // 召回时需要的扩展信息
+          top_comments: cleanedPost.top_comments,
+          images_urls: cleanedPost.images_urls,
+          thumbnail_url: cleanedPost.thumbnail_url,
+          engagement_rate: cleanedPost.engagement_rate,
+          source_url: cleanedPost.source_url,
+          platform: cleanedPost.platform,
+          category: cleanedPost.category,
+          keywords: cleanedPost.keywords
         },
         created_at: Date.now()
       }
@@ -330,11 +359,11 @@ export class XiaohongshuMilvusService {
       let posts: XiaohongshuPost[] = []
 
       if (Array.isArray(data)) {
-        posts = data
+        posts = this.normalizeToXHSPosts(data)
       } else if (data.posts && Array.isArray(data.posts)) {
-        posts = data.posts
+        posts = this.normalizeToXHSPosts(data.posts)
       } else if (data.data && Array.isArray(data.data)) {
-        posts = data.data
+        posts = this.normalizeToXHSPosts(data.data)
       } else {
         throw new Error('JSON格式不正确，期望数组或包含posts/data字段的对象')
       }
@@ -355,6 +384,66 @@ export class XiaohongshuMilvusService {
   }
 
   /**
+   * 将输入数组规范化为小红书向量格式（统一接受“爆文库格式”）
+   * 爆文库格式字段示例：likes_count / favorites_count / comments_count / images_urls / thumbnail_url / top_comments / published_at 等
+   */
+  private normalizeToXHSPosts(arr: any[]): XiaohongshuPost[] {
+    return arr
+      .map((item: any) => {
+        // 判断是否为爆文库格式（具备 likes_count 或 favorites_count 等字段）
+        const isContentLibrary =
+          item && (typeof item.likes_count === 'number' || typeof item.favorites_count === 'number' || typeof item.comments_count === 'number')
+
+        if (isContentLibrary) {
+          const cover = item.thumbnail_url || (Array.isArray(item.images_urls) && item.images_urls.length > 0 ? item.images_urls[0] : '')
+          const post: XiaohongshuPost = {
+            id: item.id,
+            title: item.title || '',
+            content: item.content || '',
+            audio_url: '',
+            cover_image_url: cover || '',
+            video_url: item.video_url || '',
+            likes: Math.max(0, item.likes_count || 0),
+            favorites: Math.max(0, item.favorites_count || 0),
+            comments: Math.max(0, item.comments_count || 0),
+            author: item.author || '',
+            tags: Array.isArray(item.tags) ? item.tags : [],
+            publish_time: item.published_at || item.created_at,
+            // 扩展信息，便于召回展示
+            top_comments: Array.isArray(item.top_comments) ? item.top_comments : [],
+            images_urls: Array.isArray(item.images_urls) ? item.images_urls : [],
+            thumbnail_url: item.thumbnail_url || '',
+            engagement_rate: typeof item.engagement_rate === 'number' ? item.engagement_rate : undefined,
+            source_url: item.source_url || '',
+            platform: item.platform || '',
+            category: item.category || '',
+            keywords: Array.isArray(item.keywords) ? item.keywords : []
+          }
+          return post
+        }
+
+        // 兼容原有小红书向量格式
+        const post: XiaohongshuPost = {
+          id: item.id,
+          title: item.title || '',
+          content: item.content || '',
+          audio_url: item.audio_url || '',
+          cover_image_url: item.cover_image_url || '',
+          video_url: item.video_url || '',
+          likes: Math.max(0, item.likes || 0),
+          favorites: Math.max(0, item.favorites || 0),
+          comments: Math.max(0, item.comments || 0),
+          author: item.author || '',
+          tags: Array.isArray(item.tags) ? item.tags : [],
+          publish_time: item.publish_time || item.published_at || item.created_at,
+          top_comments: Array.isArray(item.top_comments) ? item.top_comments : [],
+        }
+        return post
+      })
+      .filter((p: XiaohongshuPost) => (p.title && p.content))
+  }
+
+  /**
    * 搜索相似帖子
    */
   async searchSimilarPosts(
@@ -364,6 +453,7 @@ export class XiaohongshuMilvusService {
     minScore: number = 0.5
   ) {
     try {
+      // 与写入一致：对“标题+正文合并文本”策略，查询向量直接来源于查询文本
       const queryVector = await this.generateEmbedding(query)
       
       const results = await this.milvusService.searchSimilarDocuments(
@@ -386,7 +476,15 @@ export class XiaohongshuMilvusService {
         audio_url: result.metadata.audio_url,
         cover_image_url: result.metadata.cover_image_url,
         video_url: result.metadata.video_url,
-        publish_time: result.metadata.publish_time
+        publish_time: result.metadata.publish_time,
+        top_comments: result.metadata.top_comments,
+        images_urls: result.metadata.images_urls,
+        thumbnail_url: result.metadata.thumbnail_url,
+        engagement_rate: result.metadata.engagement_rate,
+        source_url: result.metadata.source_url,
+        platform: result.metadata.platform,
+        category: result.metadata.category,
+        keywords: result.metadata.keywords
       }))
     } catch (error) {
       console.error('❌ 搜索相似帖子失败:', error)

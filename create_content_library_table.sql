@@ -38,6 +38,12 @@ CREATE TABLE IF NOT EXISTS lab_content_library (
     published_at TIMESTAMP WITH TIME ZONE CHECK (published_at IS NULL OR published_at <= CURRENT_TIMESTAMP), -- 发布时间不能是未来
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    -- 向量化状态字段
+    vector_status VARCHAR(20) DEFAULT 'pending' CHECK (vector_status IN ('pending', 'success', 'failed')),
+    vector_id VARCHAR(200),
+    vector_error TEXT,
+    last_vectorized_at TIMESTAMP WITH TIME ZONE,
     
     -- 确保更新时间不早于创建时间
     CONSTRAINT lab_content_library_time_check CHECK (updated_at >= created_at),
@@ -62,6 +68,8 @@ CREATE INDEX IF NOT EXISTS idx_lab_content_library_published_at ON lab_content_l
 CREATE INDEX IF NOT EXISTS idx_lab_content_library_likes_count ON lab_content_library(likes_count DESC);
 CREATE INDEX IF NOT EXISTS idx_lab_content_library_views_count ON lab_content_library(views_count DESC);
 CREATE INDEX IF NOT EXISTS idx_lab_content_library_engagement_rate ON lab_content_library(engagement_rate DESC);
+-- 向量化状态索引
+CREATE INDEX IF NOT EXISTS idx_lab_content_library_vector_status ON lab_content_library(vector_status);
 
 -- 最重要的复合索引（覆盖最常见的查询组合）
 CREATE INDEX IF NOT EXISTS idx_lab_content_library_status_created ON lab_content_library(status, created_at DESC);
