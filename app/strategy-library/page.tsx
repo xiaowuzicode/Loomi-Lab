@@ -122,10 +122,12 @@ export default function StrategyLibraryPage() {
   const [activeTab, setActiveTab] = useState(0)
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null)
   const [isCreating, setIsCreating] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   
   // Modal状态
   const { isOpen: isModalOpen, onOpen: onModalOpen, onClose: onModalClose } = useDisclosure()
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure()
+  const [deleting, setDeleting] = useState(false)
   
   // 表单状态
   const [formTitle, setFormTitle] = useState('')
@@ -201,19 +203,24 @@ export default function StrategyLibraryPage() {
 
   // 提交表单
   const handleSubmit = async () => {
+    if (submitting) return
     if (!validateForm()) return
     
     try {
+      setSubmitting(true)
+      // 提交开始后立即关闭弹窗，防止重复点击
+      onModalClose()
       if (isCreating) {
         await createStrategy(formTitle.trim(), formContent.trim())
       } else if (selectedStrategy) {
         await updateStrategy(selectedStrategy.id, formTitle.trim(), formContent.trim())
       }
       
-      onModalClose()
       resetForm()
     } catch (error) {
       console.error('提交失败:', error)
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -225,19 +232,25 @@ export default function StrategyLibraryPage() {
 
   // 执行删除
   const handleDelete = async () => {
+    if (deleting) return
     if (!selectedStrategy) return
     
     try {
-      await deleteStrategy(selectedStrategy.id)
+      setDeleting(true)
+      // 点击确认后先关闭弹窗，防止重复点击
       onDeleteClose()
+      await deleteStrategy(selectedStrategy.id)
       setSelectedStrategy(null)
     } catch (error) {
       console.error('删除失败:', error)
+    } finally {
+      setDeleting(false)
     }
   }
 
   // 开始向量化
   const handleVectorize = async () => {
+    if (vectorizing) return
     setVectorizing(true)
     try {
       await vectorizeStrategies()
@@ -248,6 +261,7 @@ export default function StrategyLibraryPage() {
 
   // RAG查询
   const handleRagQuery = async () => {
+    if (ragLoading) return
     if (!queryText.trim()) {
       toast({
         title: '查询内容不能为空',
@@ -697,7 +711,7 @@ export default function StrategyLibraryPage() {
             </ModalBody>
 
             <ModalFooter>
-              <Button colorScheme="blue" mr={3} onClick={handleSubmit}>
+              <Button colorScheme="blue" mr={3} onClick={handleSubmit} isLoading={submitting} isDisabled={submitting}>
                 {isCreating ? '创建' : '更新'}
               </Button>
               <Button onClick={onModalClose}>取消</Button>
