@@ -264,6 +264,10 @@ export class MilvusService {
         await client.flush({
           collection_names: [collectionName],
         })
+        // 重新加载集合，确保新segments可被搜索到
+        await client.loadCollection({
+          collection_name: collectionName,
+        })
 
         console.log(`✅ 成功插入 ${documents.length} 个文档到 ${collectionName}`)
         return true
@@ -345,19 +349,22 @@ export class MilvusService {
         vector: queryVector,
         filter: '', // 可以添加过滤条件
         limit: topK,
-        output_fields: ['text', 'source', 'metadata'],
+        // 返回主键以便后续更新/删除等操作使用
+        output_fields: ['id', 'text', 'source', 'metadata'],
         metric_type: 'IP',
         params: { nprobe: 10 },
       })
 
       if (searchRes.status.error_code === ErrorCode.SUCCESS) {
-        const results = searchRes.results.map((result: any) => ({
-          id: result.id,
-          text: result.text,
-          source: result.source,
-          metadata: JSON.parse(result.metadata || '{}'),
-          score: result.score,
-        })).filter((result: any) => result.score >= minScore)
+        const results = searchRes.results
+          .map((result: any) => ({
+            id: result.id, // 需要 output_fields 返回
+            text: result.text,
+            source: result.source,
+            metadata: JSON.parse(result.metadata || '{}'),
+            score: result.score,
+          }))
+          .filter((result: any) => result.score >= minScore)
 
         console.log(`🔍 在 ${collectionName} 中找到 ${results.length} 个相似文档`)
         return results
@@ -456,6 +463,8 @@ export class MilvusService {
       })
 
       if ((res as any).status?.error_code === ErrorCode.SUCCESS) {
+        // 刷新确保持久化
+        await client.flush({ collection_names: [collectionName] })
         console.log(`✅ 成功删除 ${ids.length} 条记录从集合 ${collectionName}`)
         return true
       }
@@ -482,6 +491,7 @@ export class MilvusService {
       })
 
       if ((res as any).status?.error_code === ErrorCode.SUCCESS) {
+        await client.flush({ collection_names: [collectionName] })
         console.log(`✅ 成功根据条件删除记录: ${expression}`)
         return true
       }

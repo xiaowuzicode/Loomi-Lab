@@ -26,6 +26,7 @@ import {
   RiInstagramLine,
   RiSparklingFill,
   RiMessageLine,
+  RiLightbulbLine,
 } from 'react-icons/ri'
 
 // const Box = Box // 暂时移除动画
@@ -70,6 +71,12 @@ const getNavItems = (userCount: number): NavItem[] => [
     href: '/knowledge-base-v2',
     icon: RiBrainLine,
     color: 'purple.400',
+  },
+  {
+    label: '策略库',
+    href: '/strategy-library',
+    icon: RiLightbulbLine,
+    color: 'indigo.400',
   },
   {
     label: '爆文库管理',
