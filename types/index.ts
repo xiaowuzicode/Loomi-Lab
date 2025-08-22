@@ -158,17 +158,47 @@ export interface ContentImportResult {
   imported_items: string[]
 }
 
-// 提示词相关
-export interface Prompt {
+// 提示词管理 - 基于YAML文件的Agent管理
+export interface AgentInfo {
   id: string
   name: string
   description: string
-  category: 'system' | 'user' | 'assistant'
-  template: string
-  variables: string[]
-  usage: number
-  createdAt: Date
-  updatedAt: Date
+  prompt: string
+  file: string
+  syncStatus: 'synced' | 'modified' | 'error'
+  lastModified: string
+  category: string
+}
+
+export interface PromptDirectory {
+  path: string
+  agents: AgentInfo[]
+  totalCount: number
+}
+
+export interface AgentUpdate {
+  agentId: string
+  prompt: string
+}
+
+export interface BatchUpdateRequest {
+  path: string
+  updates: AgentUpdate[]
+}
+
+export interface BatchUpdateResult {
+  agentId: string
+  success: boolean
+  error?: string
+}
+
+export interface PromptManagerState {
+  directoryPath: string
+  agents: AgentInfo[]
+  localEdits: Record<string, string | undefined> // agentId -> editedPrompt
+  loading: boolean
+  error: string | null
+  lastSyncCheck: Date | null
 }
 
 // 小红书相关
