@@ -251,3 +251,66 @@ COMMENT ON FUNCTION lab_query_user_project_by_id IS '查询特定用户的特定
 COMMENT ON FUNCTION lab_query_projects_by_date IS '按时间范围查询所有项目';
 COMMENT ON FUNCTION lab_get_all_project_titles IS '获取所有不重复的项目标题';
 COMMENT ON FUNCTION lab_get_project_chat_messages IS '获取某个项目的聊天消息';
+
+-- 7. 基于 projects 表统计用户使用量（总计与当月）- 批量版本
+CREATE OR REPLACE FUNCTION lab_get_user_usage_counts(
+  user_ids_param UUID[],
+  target_month DATE DEFAULT DATE_TRUNC('month', CURRENT_DATE)
+)
+RETURNS TABLE(
+  user_id UUID,
+  total_usage INTEGER,
+  monthly_usage INTEGER
+) 
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+  WITH bounds AS (
+    SELECT 
+      DATE_TRUNC('month', target_month)::timestamptz AS month_start,
+      (DATE_TRUNC('month', target_month) + INTERVAL '1 month')::timestamptz AS month_end
+  )
+  SELECT 
+    p.user_id,
+    COUNT(*) AS total_usage,
+    COUNT(*) FILTER (
+      WHERE p.created_at >= b.month_start AND p.created_at < b.month_end
+    ) AS monthly_usage
+  FROM public.projects p
+  CROSS JOIN bounds b
+  WHERE p.user_id = ANY(user_ids_param)
+  GROUP BY p.user_id;
+$$;
+
+-- 7.1 单个用户使用量统计（便于详情页查询）
+CREATE OR REPLACE FUNCTION lab_get_single_user_usage(
+  user_id_param UUID,
+  target_month DATE DEFAULT DATE_TRUNC('month', CURRENT_DATE)
+)
+RETURNS TABLE(
+  total_usage INTEGER,
+  monthly_usage INTEGER
+) 
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+  WITH bounds AS (
+    SELECT 
+      DATE_TRUNC('month', target_month)::timestamptz AS month_start,
+      (DATE_TRUNC('month', target_month) + INTERVAL '1 month')::timestamptz AS month_end
+  )
+  SELECT 
+    COUNT(*) AS total_usage,
+    COUNT(*) FILTER (
+      WHERE p.created_at >= b.month_start AND p.created_at < b.month_end
+    ) AS monthly_usage
+  FROM public.projects p
+  CROSS JOIN bounds b
+  WHERE p.user_id = user_id_param;
+$$;
+
+-- 权限与注释
+GRANT EXECUTE ON FUNCTION lab_get_user_usage_counts(UUID[], DATE) TO service_role;
+GRANT EXECUTE ON FUNCTION lab_get_single_user_usage(UUID, DATE) TO service_role;
+COMMENT ON FUNCTION lab_get_user_usage_counts IS '批量返回用户在 projects 表中的总使用量与当月使用量';
+COMMENT ON FUNCTION lab_get_single_user_usage IS '返回单个用户在 projects 表中的总使用量与当月使用量';

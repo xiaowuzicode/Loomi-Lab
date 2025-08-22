@@ -137,6 +137,45 @@ export class UserStorage {
         }
       }
 
+      // 直接逐个用户查询 projects 表统计使用量（总/当月）
+      try {
+        const now = new Date()
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+
+        const enhanced = await Promise.all(filteredUsers.map(async (u: any) => {
+          try {
+            const totalRes = await this.supabase
+              .from('projects')
+              .select('id', { count: 'exact', head: true })
+              .eq('user_id', u.id)
+
+            const monthRes = await this.supabase
+              .from('projects')
+              .select('id', { count: 'exact', head: true })
+              .eq('user_id', u.id)
+              .gte('created_at', monthStart.toISOString())
+              .lt('created_at', monthEnd.toISOString())
+
+            return {
+              ...u,
+              total_usage: Number(totalRes.count || 0),
+              monthly_usage: Number(monthRes.count || 0),
+            }
+          } catch (e) {
+            console.error('统计用户使用量异常:', e)
+            return {
+              ...u,
+              total_usage: u.total_usage || 0,
+              monthly_usage: u.monthly_usage || 0,
+            }
+          }
+        }))
+        filteredUsers = enhanced
+      } catch (usageErr) {
+        console.error('统计用户使用量总流程异常:', usageErr)
+      }
+
       return {
         users: filteredUsers,
         total: actualTotal,
@@ -168,7 +207,33 @@ export class UserStorage {
       if (error) throw error
 
       if (data && data.length > 0) {
-        return this.transformUserData(data[0])
+        const baseUser = this.transformUserData(data[0])
+        try {
+          const now = new Date()
+          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+          const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+
+          const totalRes = await this.supabase
+            .from('projects')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', baseUser.id)
+          const monthRes = await this.supabase
+            .from('projects')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', baseUser.id)
+            .gte('created_at', monthStart.toISOString())
+            .lt('created_at', monthEnd.toISOString())
+
+          return {
+            ...baseUser,
+            total_usage: Number(totalRes.count || 0),
+            monthly_usage: Number(monthRes.count || 0),
+          }
+        } catch (e) {
+          console.error('查询单用户使用量异常:', e)
+        }
+
+        return baseUser
       }
       
       return null
@@ -190,7 +255,33 @@ export class UserStorage {
       if (error) throw error
 
       if (data && data.length > 0) {
-        return this.transformUserData(data[0])
+        const baseUser = this.transformUserData(data[0])
+        try {
+          const now = new Date()
+          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+          const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+
+          const totalRes = await this.supabase
+            .from('projects')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', baseUser.id)
+          const monthRes = await this.supabase
+            .from('projects')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', baseUser.id)
+            .gte('created_at', monthStart.toISOString())
+            .lt('created_at', monthEnd.toISOString())
+
+          return {
+            ...baseUser,
+            total_usage: Number(totalRes.count || 0),
+            monthly_usage: Number(monthRes.count || 0),
+          }
+        } catch (e) {
+          console.error('查询单用户使用量异常:', e)
+        }
+
+        return baseUser
       }
       
       return null

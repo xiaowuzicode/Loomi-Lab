@@ -132,25 +132,28 @@ export default function UsersPage() {
   const bgColor = useColorModeValue('white', 'gray.800')
   const borderColor = useColorModeValue('gray.200', 'gray.700')
 
-  // 加载用户数据
+  // 加载用户数据（搜索和筛选增加700ms防抖）
   useEffect(() => {
-    const loadData = async () => {
-      // 获取用户统计信息
-      await fetchUserStats()
-      
-      // 获取用户列表
-      const result = await fetchUsers({
-        page: currentPage,
-        limit: USERS_PER_PAGE,
-        search: searchTerm,
-        status: statusFilter,
-        role: roleFilter
-      })
-      
-      setPagination(result.pagination)
-    }
+    const debounceTimer = setTimeout(() => {
+      const loadData = async () => {
+        // 获取用户统计信息
+        await fetchUserStats()
+        
+        // 获取用户列表
+        const result = await fetchUsers({
+          page: currentPage,
+          limit: USERS_PER_PAGE,
+          search: searchTerm,
+          status: statusFilter,
+          role: roleFilter
+        })
+        
+        setPagination(result.pagination)
+      }
+      loadData()
+    }, 700)
 
-    loadData()
+    return () => clearTimeout(debounceTimer)
     // 移除函数依赖项，避免无限循环
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, searchTerm, statusFilter, roleFilter])
