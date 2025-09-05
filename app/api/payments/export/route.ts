@@ -1,20 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PaymentDB, PaymentOrder, PaymentQueryParams, PaymentStats } from '@/lib/payment-db'
+import { PaymentDB, PaymentOrder } from '@/lib/payment-db'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     
     // 解析查询参数
-    const params: PaymentQueryParams = {
+    const params = {
       app_id: searchParams.get('app_id') || undefined,
       status: searchParams.get('status') || undefined,
       order_type: searchParams.get('order_type') || undefined,
       start_date: searchParams.get('start_date') || undefined,
       end_date: searchParams.get('end_date') || undefined,
       search_term: searchParams.get('search_term') || undefined,
-      page: parseInt(searchParams.get('page') || '1'),
-      limit: parseInt(searchParams.get('limit') || '50'),
     }
 
     // 构建查询SQL
@@ -55,13 +53,7 @@ export async function GET(request: NextRequest) {
 
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : ''
 
-    // 获取总数
-    const countQuery = `SELECT COUNT(*) as count FROM payment_orders ${whereClause}`
-    const countResult = await PaymentDB.queryOne<{count: string}>(countQuery, queryParams.slice())
-    const total = parseInt(countResult?.count || '0')
-
-    // 获取数据
-    const offset = (params.page! - 1) * params.limit!
+    // 获取所有数据（用于导出）
     const dataQuery = `
       SELECT 
         id,
@@ -79,53 +71,65 @@ export async function GET(request: NextRequest) {
       FROM payment_orders 
       ${whereClause}
       ORDER BY created_at DESC
-      LIMIT $${paramIndex++} OFFSET $${paramIndex++}
     `
-    const dataParams = [...queryParams, params.limit, offset]
 
-    const payments = await PaymentDB.query<PaymentOrder>(dataQuery, dataParams)
+    const payments = await PaymentDB.query<PaymentOrder>(dataQuery, queryParams)
 
-    // 获取统计数据
-    const statsQuery = `
-      SELECT 
-        COALESCE(SUM(CASE WHEN status = 'succeeded' THEN amount ELSE 0 END), 0) as total_revenue,
-        COALESCE(SUM(CASE WHEN status = 'succeeded' AND DATE(created_at) = CURRENT_DATE THEN amount ELSE 0 END), 0) as today_revenue,
-        COUNT(*) as total_orders,
-        COUNT(CASE WHEN status = 'succeeded' THEN 1 END) as completed_orders,
-        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_orders,
-        COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_orders
-      FROM payment_orders
-      ${params.app_id ? 'WHERE app_id = $1' : ''}
-    `
-    const statsParams = params.app_id ? [params.app_id] : []
-    const stats = await PaymentDB.queryOne<PaymentStats>(statsQuery, statsParams)
+    // 转换为 CSV 格式
+    const csvHeaders = [
+      'ID',
+      '应用ID',
+      '商户订单号',
+      '状态',
+      '订单类型',
+      '金额(元)',
+      '货币',
+      '支付网关',
+      '网关交易号',
+      '创建时间',
+      '更新时间'
+    ]
 
-    return NextResponse.json({
-      success: true,
-      data: payments,
-      stats: stats || {
-        total_revenue: 0,
-        today_revenue: 0,
-        total_orders: 0,
-        completed_orders: 0,
-        pending_orders: 0,
-        failed_orders: 0,
-        refund_orders: 0,
-        total_refunds: 0
+    const csvRows = payments.map(payment => [
+      payment.id,
+      payment.app_id,
+      payment.merchant_order_id,
+      payment.status === 'succeeded' ? '已完成' :
+        payment.status === 'pending' ? '待处理' :
+        payment.status === 'processing' ? '处理中' : '失败',
+      payment.order_type === 'payment' ? '支付' : '充值',
+      (payment.amount / 100).toFixed(2),
+      payment.currency,
+      payment.payment_gateway,
+      payment.gateway_transaction_id || '',
+      new Date(payment.created_at).toLocaleString('zh-CN'),
+      new Date(payment.updated_at).toLocaleString('zh-CN')
+    ])
+
+    // 生成 CSV 内容
+    const csvContent = [
+      csvHeaders.join(','),
+      ...csvRows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n')
+
+    // 返回 CSV 文件
+    const filename = `payments_export_${new Date().toISOString().split('T')[0]}.csv`
+
+    return new NextResponse(csvContent, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename=${filename}`,
+        'Content-Length': Buffer.byteLength(csvContent, 'utf8').toString(),
       },
-      pagination: {
-        page: params.page,
-        limit: params.limit,
-        total,
-        totalPages: Math.ceil(total / params.limit!),
-      }
     })
+
   } catch (error) {
-    console.error('Error fetching payment orders:', error)
+    console.error('Error exporting payments:', error)
     return NextResponse.json(
       { 
         success: false,
-        error: '获取支付订单失败',
+        error: '导出支付数据失败',
         message: error instanceof Error ? error.message : '未知错误'
       },
       { status: 500 }

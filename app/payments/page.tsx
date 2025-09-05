@@ -54,146 +54,284 @@ const MotionBox = motion(Box)
 
 interface Payment {
   id: string
-  user_id: string
-  user_email: string
+  app_id: string
+  merchant_order_id: string
+  status: 'pending' | 'processing' | 'succeeded' | 'failed'
+  order_type: 'payment' | 'recharge'
   amount: number
   currency: string
-  status: 'pending' | 'completed' | 'failed' | 'cancelled'
-  payment_method: string
+  payment_gateway: string
+  gateway_transaction_id?: string
+  extra_data?: any
   created_at: string
   updated_at: string
-  description?: string
-  transaction_id?: string
+}
+
+interface RefundOrder {
+  id: string
+  app_id: string
+  payment_order_id: string
+  status: 'pending' | 'processing' | 'succeeded' | 'failed'
+  refund_amount: number
+  currency: string
+  reason?: string
+  gateway_refund_id?: string
+  merchant_order_id: string
+  original_amount: number
+  gateway_transaction_id: string
+  order_type: string
+  payment_gateway: string
+  created_at: string
+  updated_at: string
+}
+
+interface PaymentStats {
+  total_revenue: number
+  today_revenue: number
+  total_orders: number
+  completed_orders: number
+  pending_orders: number
+  failed_orders: number
+  total_refunds?: number
+  total_refund_orders?: number
 }
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([])
+  const [refunds, setRefunds] = useState<RefundOrder[]>([])
+  const [stats, setStats] = useState<PaymentStats>({
+    total_revenue: 0,
+    today_revenue: 0,
+    total_orders: 0,
+    completed_orders: 0,
+    pending_orders: 0,
+    failed_orders: 0,
+    total_refunds: 0,
+    total_refund_orders: 0
+  })
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [dateFilter, setDateFilter] = useState('all')
+  const [appIdFilter, setAppIdFilter] = useState('all')
+  const [orderTypeFilter, setOrderTypeFilter] = useState('all')
+  const [currentTab, setCurrentTab] = useState('payments') // 'payments' | 'refunds'
   const toast = useToast()
 
   const bgColor = useColorModeValue('white', 'gray.800')
   const borderColor = useColorModeValue('gray.200', 'gray.700')
 
-  // 模拟数据
-  useEffect(() => {
-    const fetchPayments = async () => {
+  // 获取支付数据
+  const fetchPayments = async () => {
+    try {
       setLoading(true)
-      await new Promise(resolve => setTimeout(resolve, 1000))
       
-      const mockPayments: Payment[] = [
-        {
-          id: 'pay_001',
-          user_id: '1',
-          user_email: 'john@example.com',
-          amount: 99.00,
-          currency: 'CNY',
-          status: 'completed',
-          payment_method: '微信支付',
-          created_at: '2024-01-20T10:30:00Z',
-          updated_at: '2024-01-20T10:31:00Z',
-          description: 'AI文案生成服务 - 月度套餐',
-          transaction_id: 'wx_123456789',
-        },
-        {
-          id: 'pay_002',
-          user_id: '2',
-          user_email: 'jane@example.com',
-          amount: 299.00,
-          currency: 'CNY',
-          status: 'pending',
-          payment_method: '支付宝',
-          created_at: '2024-01-20T14:15:00Z',
-          updated_at: '2024-01-20T14:15:00Z',
-          description: 'AI智能回复服务 - 季度套餐',
-          transaction_id: 'alipay_987654321',
-        },
-        {
-          id: 'pay_003',
-          user_id: '3',
-          user_email: 'bob@example.com',
-          amount: 199.00,
-          currency: 'CNY',
-          status: 'failed',
-          payment_method: '银行卡',
-          created_at: '2024-01-19T16:45:00Z',
-          updated_at: '2024-01-19T16:46:00Z',
-          description: '内容优化服务 - 月度套餐',
-          transaction_id: 'bank_456789123',
-        },
-        {
-          id: 'pay_004',
-          user_id: '1',
-          user_email: 'john@example.com',
-          amount: 599.00,
-          currency: 'CNY',
-          status: 'completed',
-          payment_method: '微信支付',
-          created_at: '2024-01-18T09:20:00Z',
-          updated_at: '2024-01-18T09:21:00Z',
-          description: 'AI全套服务 - 年度套餐',
-          transaction_id: 'wx_789123456',
-        },
-      ]
+      // 构建查询参数
+      const params = new URLSearchParams()
+      if (statusFilter !== 'all') params.append('status', statusFilter)
+      if (appIdFilter !== 'all') params.append('app_id', appIdFilter)
+      if (orderTypeFilter !== 'all') params.append('order_type', orderTypeFilter)
+      if (searchTerm) params.append('search_term', searchTerm)
       
-      setPayments(mockPayments)
+      // 时间筛选
+      if (dateFilter !== 'all') {
+        const now = new Date()
+        let startDate: Date
+        
+        switch (dateFilter) {
+          case 'today':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+            break
+          case 'week':
+            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+            break
+          case 'month':
+            startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+            break
+          default:
+            startDate = new Date(0)
+        }
+        
+        if (startDate.getTime() > 0) {
+          params.append('start_date', startDate.toISOString())
+          params.append('end_date', now.toISOString())
+        }
+      }
+      
+      const response = await fetch(`/api/payments?${params.toString()}`)
+      const result = await response.json()
+      
+      if (result.success) {
+        setPayments(result.data || [])
+        setStats(result.stats || stats)
+      } else {
+        throw new Error(result.error || '获取数据失败')
+      }
+    } catch (error) {
+      console.error('Error fetching payments:', error)
+      toast({
+        title: '获取支付数据失败',
+        description: error instanceof Error ? error.message : '未知错误',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    } finally {
       setLoading(false)
     }
-
-    fetchPayments()
-  }, [])
-
-  // 过滤支付记录
-  const filteredPayments = payments.filter(payment => {
-    const matchesSearch = payment.user_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         payment.transaction_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         payment.description?.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === 'all' || payment.status === statusFilter
-    
-    let matchesDate = true
-    if (dateFilter !== 'all') {
-      const paymentDate = new Date(payment.created_at)
-      const now = new Date()
-      const diffTime = now.getTime() - paymentDate.getTime()
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-      
-      switch (dateFilter) {
-        case 'today':
-          matchesDate = diffDays <= 1
-          break
-        case 'week':
-          matchesDate = diffDays <= 7
-          break
-        case 'month':
-          matchesDate = diffDays <= 30
-          break
-      }
-    }
-    
-    return matchesSearch && matchesStatus && matchesDate
-  })
-
-  const handleExportPayments = () => {
-    toast({
-      title: '导出成功',
-      description: '支付数据已导出为 CSV 文件',
-      status: 'success',
-      duration: 3000,
-      isClosable: true,
-    })
   }
 
-  const getStatusBadge = (status: Payment['status']) => {
-    const statusConfig = {
-      completed: { color: 'green', label: '已完成', icon: RiCheckLine },
-      pending: { color: 'yellow', label: '处理中', icon: RiTimeLine },
+  // 获取退款数据
+  const fetchRefunds = async () => {
+    try {
+      setLoading(true)
+      
+      const params = new URLSearchParams()
+      if (statusFilter !== 'all') params.append('status', statusFilter)
+      if (appIdFilter !== 'all') params.append('app_id', appIdFilter)
+      if (searchTerm) params.append('search_term', searchTerm)
+      
+      // 时间筛选
+      if (dateFilter !== 'all') {
+        const now = new Date()
+        let startDate: Date
+        
+        switch (dateFilter) {
+          case 'today':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+            break
+          case 'week':
+            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+            break
+          case 'month':
+            startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+            break
+          default:
+            startDate = new Date(0)
+        }
+        
+        if (startDate.getTime() > 0) {
+          params.append('start_date', startDate.toISOString())
+          params.append('end_date', now.toISOString())
+        }
+      }
+      
+      const response = await fetch(`/api/refunds?${params.toString()}`)
+      const result = await response.json()
+      
+      if (result.success) {
+        setRefunds(result.data || [])
+        // 更新退款统计数据
+        if (result.stats) {
+          setStats(prev => ({
+            ...prev,
+            total_refunds: result.stats.total_refunds || 0,
+            total_refund_orders: result.stats.total_refund_orders || 0
+          }))
+        }
+      } else {
+        throw new Error(result.error || '获取退款数据失败')
+      }
+    } catch (error) {
+      console.error('Error fetching refunds:', error)
+      toast({
+        title: '获取退款数据失败',
+        description: error instanceof Error ? error.message : '未知错误',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (currentTab === 'payments') {
+      fetchPayments()
+    } else {
+      fetchRefunds()
+    }
+  }, [statusFilter, dateFilter, appIdFilter, orderTypeFilter, searchTerm, currentTab])
+
+  // 数据已在API层过滤，这里直接使用
+  const filteredPayments = payments
+  const filteredRefunds = refunds
+
+  const handleExportData = async () => {
+    try {
+      // 构建查询参数
+      const params = new URLSearchParams()
+      if (statusFilter !== 'all') params.append('status', statusFilter)
+      if (appIdFilter !== 'all') params.append('app_id', appIdFilter)
+      if (orderTypeFilter !== 'all' && currentTab === 'payments') params.append('order_type', orderTypeFilter)
+      if (searchTerm) params.append('search_term', searchTerm)
+      
+      // 时间筛选
+      if (dateFilter !== 'all') {
+        const now = new Date()
+        let startDate: Date
+        
+        switch (dateFilter) {
+          case 'today':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+            break
+          case 'week':
+            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+            break
+          case 'month':
+            startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+            break
+          default:
+            startDate = new Date(0)
+        }
+        
+        if (startDate.getTime() > 0) {
+          params.append('start_date', startDate.toISOString())
+          params.append('end_date', now.toISOString())
+        }
+      }
+
+      const exportUrl = currentTab === 'payments' 
+        ? `/api/payments/export?${params.toString()}`
+        : `/api/refunds/export?${params.toString()}`
+
+      // 创建下载链接
+      const link = document.createElement('a')
+      link.href = exportUrl
+      link.download = ''
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      toast({
+        title: '导出成功',
+        description: `${currentTab === 'payments' ? '支付' : '退款'}数据已导出为 CSV 文件`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+    } catch (error) {
+      console.error('Export error:', error)
+      toast({
+        title: '导出失败',
+        description: '导出数据时发生错误，请稍后重试',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    }
+  }
+
+  const getStatusBadge = (status: string) => {
+    const statusConfig: Record<string, { color: string; label: string; icon: any }> = {
+      succeeded: { color: 'green', label: '已完成', icon: RiCheckLine },
+      pending: { color: 'yellow', label: '待处理', icon: RiTimeLine },
+      processing: { color: 'blue', label: '处理中', icon: RiTimeLine },
       failed: { color: 'red', label: '失败', icon: RiCloseLine },
-      cancelled: { color: 'gray', label: '已取消', icon: RiCloseLine },
     }
     
-    const config = statusConfig[status]
+    const config = statusConfig[status] || { color: 'gray', label: status, icon: RiTimeLine }
     return (
       <Badge colorScheme={config.color} variant="subtle">
         <HStack spacing={1}>
@@ -201,6 +339,20 @@ export default function PaymentsPage() {
           <Text>{config.label}</Text>
         </HStack>
       </Badge>
+    )
+  }
+
+  const getOrderTypeBadge = (orderType: string) => {
+    const typeConfig: Record<string, { color: string; label: string }> = {
+      payment: { color: 'purple', label: '支付' },
+      recharge: { color: 'green', label: '充值' },
+    }
+    
+    const config = typeConfig[orderType] || { color: 'gray', label: orderType }
+    return (
+      <Tag colorScheme={config.color} size="sm">
+        {config.label}
+      </Tag>
     )
   }
 
@@ -215,18 +367,9 @@ export default function PaymentsPage() {
     }).format(amount)
   }
 
-  // 计算统计数据
-  const totalRevenue = payments
-    .filter(p => p.status === 'completed')
-    .reduce((sum, p) => sum + p.amount, 0)
-  
-  const todayRevenue = payments
-    .filter(p => {
-      const today = new Date().toDateString()
-      const paymentDate = new Date(p.created_at).toDateString()
-      return p.status === 'completed' && paymentDate === today
-    })
-    .reduce((sum, p) => sum + p.amount, 0)
+  // 统计数据来自API
+  const totalRevenue = stats.total_revenue / 100 // 从分转换为元
+  const todayRevenue = stats.today_revenue / 100
 
   return (
     <PageLayout>
@@ -277,14 +420,14 @@ export default function PaymentsPage() {
             />
             <StatCard
               title="成功订单"
-              value={payments.filter(p => p.status === 'completed').length}
+              value={stats.completed_orders}
               icon={RiCheckLine}
               iconColor="green.400"
               loading={loading}
             />
             <StatCard
               title="待处理订单"
-              value={payments.filter(p => p.status === 'pending').length}
+              value={stats.pending_orders}
               icon={RiTimeLine}
               iconColor="yellow.400"
               loading={loading}
@@ -300,26 +443,62 @@ export default function PaymentsPage() {
         >
           <Card>
             <HStack spacing={4} flexWrap="wrap">
+              {/* 切换标签 */}
+              <HStack spacing={0}>
+                <Button
+                  size="sm"
+                  variant={currentTab === 'payments' ? 'solid' : 'ghost'}
+                  colorScheme="primary"
+                  onClick={() => setCurrentTab('payments')}
+                  borderRadius="md"
+                >
+                  支付订单
+                </Button>
+                <Button
+                  size="sm"
+                  variant={currentTab === 'refunds' ? 'solid' : 'ghost'}
+                  colorScheme="primary"
+                  onClick={() => setCurrentTab('refunds')}
+                  borderRadius="md"
+                >
+                  退款订单
+                </Button>
+              </HStack>
+
               <InputGroup maxW="400px">
                 <InputLeftElement>
                   <RiSearchLine color="gray.400" />
                 </InputLeftElement>
                 <Input
-                  placeholder="搜索用户邮箱、交易号或描述..."
+                  placeholder={currentTab === 'payments' ? "搜索商户订单号、交易号..." : "搜索商户订单号、退款原因..."}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </InputGroup>
               
-              <Select maxW="150px" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <Select maxW="120px" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                 <option value="all">全部状态</option>
-                <option value="completed">已完成</option>
-                <option value="pending">处理中</option>
+                <option value="succeeded">已完成</option>
+                <option value="pending">待处理</option>
+                <option value="processing">处理中</option>
                 <option value="failed">失败</option>
-                <option value="cancelled">已取消</option>
               </Select>
 
-              <Select maxW="150px" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}>
+              {currentTab === 'payments' && (
+                <Select maxW="120px" value={orderTypeFilter} onChange={(e) => setOrderTypeFilter(e.target.value)}>
+                  <option value="all">全部类型</option>
+                  <option value="payment">支付</option>
+                  <option value="recharge">充值</option>
+                </Select>
+              )}
+
+              <Select maxW="120px" value={appIdFilter} onChange={(e) => setAppIdFilter(e.target.value)}>
+                <option value="all">全部应用</option>
+                <option value="ai_project_alpha">AI项目Alpha</option>
+                <option value="ai_project_beta">AI项目Beta</option>
+              </Select>
+
+              <Select maxW="120px" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}>
                 <option value="all">全部时间</option>
                 <option value="today">今天</option>
                 <option value="week">最近7天</option>
@@ -336,7 +515,7 @@ export default function PaymentsPage() {
 
               <Button
                 leftIcon={<RiDownloadLine />}
-                onClick={handleExportPayments}
+                onClick={handleExportData}
                 colorScheme="primary"
               >
                 导出数据
@@ -354,7 +533,7 @@ export default function PaymentsPage() {
           <Card>
             <VStack spacing={4} align="stretch">
               <Text fontSize="lg" fontWeight="semibold">
-                支付记录 ({filteredPayments.length})
+                {currentTab === 'payments' ? '支付记录' : '退款记录'} ({currentTab === 'payments' ? filteredPayments.length : filteredRefunds.length})
               </Text>
               
               {loading ? (
@@ -363,87 +542,188 @@ export default function PaymentsPage() {
                     <Skeleton key={i} height="60px" borderRadius="md" />
                   ))}
                 </VStack>
-              ) : filteredPayments.length === 0 ? (
-                <Alert status="info">
-                  <AlertIcon />
-                  没有找到符合条件的支付记录
-                </Alert>
-              ) : (
-                <TableContainer>
-                  <Table variant="simple">
-                    <Thead>
-                      <Tr>
-                        <Th>订单信息</Th>
-                        <Th>用户</Th>
-                        <Th>金额</Th>
-                        <Th>支付方式</Th>
-                        <Th>状态</Th>
-                        <Th>创建时间</Th>
-                        <Th>操作</Th>
-                      </Tr>
-                    </Thead>
-                    <Tbody>
-                      {filteredPayments.map((payment) => (
-                        <Tr key={payment.id} _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}>
-                          <Td>
-                            <VStack align="start" spacing={1}>
-                              <Text fontWeight="medium" fontSize="sm">
-                                {payment.id}
-                              </Text>
-                              <Text fontSize="xs" color="gray.500" noOfLines={2}>
-                                {payment.description}
-                              </Text>
-                              {payment.transaction_id && (
-                                <Tag size="sm" variant="outline">
-                                  {payment.transaction_id}
-                                </Tag>
-                              )}
-                            </VStack>
-                          </Td>
-                          <Td>
-                            <Text fontSize="sm">{payment.user_email}</Text>
-                          </Td>
-                          <Td>
-                            <Text fontWeight="semibold" color="green.500">
-                              {formatCurrency(payment.amount, payment.currency)}
-                            </Text>
-                          </Td>
-                          <Td>
-                            <Tag colorScheme="blue" size="sm">
-                              {payment.payment_method}
-                            </Tag>
-                          </Td>
-                          <Td>
-                            {getStatusBadge(payment.status)}
-                          </Td>
-                          <Td>
-                            <Text fontSize="sm">
-                              {formatDate(payment.created_at)}
-                            </Text>
-                          </Td>
-                          <Td>
-                            <Menu>
-                              <MenuButton
-                                as={IconButton}
-                                icon={<RiMoreLine />}
-                                variant="ghost"
-                                size="sm"
-                              />
-                              <MenuList>
-                                <MenuItem icon={<RiEyeLine />}>
-                                  查看详情
-                                </MenuItem>
-                                <MenuItem icon={<RiDownloadLine />}>
-                                  下载凭证
-                                </MenuItem>
-                              </MenuList>
-                            </Menu>
-                          </Td>
+              ) : currentTab === 'payments' ? (
+                filteredPayments.length === 0 ? (
+                  <Alert status="info">
+                    <AlertIcon />
+                    没有找到符合条件的支付记录
+                  </Alert>
+                ) : (
+                  <TableContainer>
+                    <Table variant="simple">
+                      <Thead>
+                        <Tr>
+                          <Th>订单信息</Th>
+                          <Th>应用ID</Th>
+                          <Th>金额</Th>
+                          <Th>类型</Th>
+                          <Th>支付网关</Th>
+                          <Th>状态</Th>
+                          <Th>创建时间</Th>
+                          <Th>操作</Th>
                         </Tr>
-                      ))}
-                    </Tbody>
-                  </Table>
-                </TableContainer>
+                      </Thead>
+                      <Tbody>
+                        {filteredPayments.map((payment) => (
+                          <Tr key={payment.id} _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}>
+                            <Td>
+                              <VStack align="start" spacing={1}>
+                                <Text fontWeight="medium" fontSize="sm" color="primary.500">
+                                  {payment.merchant_order_id}
+                                </Text>
+                                <Text fontSize="xs" color="gray.500">
+                                  ID: {payment.id.slice(0, 8)}...
+                                </Text>
+                                {payment.gateway_transaction_id && (
+                                  <Tag size="sm" variant="outline">
+                                    {payment.gateway_transaction_id}
+                                  </Tag>
+                                )}
+                              </VStack>
+                            </Td>
+                            <Td>
+                              <Text fontSize="sm" fontFamily="mono">
+                                {payment.app_id}
+                              </Text>
+                            </Td>
+                            <Td>
+                              <Text fontWeight="semibold" color="green.500">
+                                {formatCurrency(payment.amount / 100, payment.currency)}
+                              </Text>
+                            </Td>
+                            <Td>
+                              {getOrderTypeBadge(payment.order_type)}
+                            </Td>
+                            <Td>
+                              <Tag colorScheme="blue" size="sm">
+                                {payment.payment_gateway}
+                              </Tag>
+                            </Td>
+                            <Td>
+                              {getStatusBadge(payment.status)}
+                            </Td>
+                            <Td>
+                              <Text fontSize="sm">
+                                {formatDate(payment.created_at)}
+                              </Text>
+                            </Td>
+                            <Td>
+                              <Menu>
+                                <MenuButton
+                                  as={IconButton}
+                                  icon={<RiMoreLine />}
+                                  variant="ghost"
+                                  size="sm"
+                                />
+                                <MenuList>
+                                  <MenuItem icon={<RiEyeLine />}>
+                                    查看详情
+                                  </MenuItem>
+                                  <MenuItem icon={<RiDownloadLine />}>
+                                    导出记录
+                                  </MenuItem>
+                                </MenuList>
+                              </Menu>
+                            </Td>
+                          </Tr>
+                        ))}
+                      </Tbody>
+                    </Table>
+                  </TableContainer>
+                )
+              ) : (
+                filteredRefunds.length === 0 ? (
+                  <Alert status="info">
+                    <AlertIcon />
+                    没有找到符合条件的退款记录
+                  </Alert>
+                ) : (
+                  <TableContainer>
+                    <Table variant="simple">
+                      <Thead>
+                        <Tr>
+                          <Th>退款信息</Th>
+                          <Th>原订单</Th>
+                          <Th>应用ID</Th>
+                          <Th>退款金额</Th>
+                          <Th>退款原因</Th>
+                          <Th>状态</Th>
+                          <Th>创建时间</Th>
+                          <Th>操作</Th>
+                        </Tr>
+                      </Thead>
+                      <Tbody>
+                        {filteredRefunds.map((refund) => (
+                          <Tr key={refund.id} _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}>
+                            <Td>
+                              <VStack align="start" spacing={1}>
+                                <Text fontWeight="medium" fontSize="sm" color="red.500">
+                                  {refund.id.slice(0, 12)}...
+                                </Text>
+                                {refund.gateway_refund_id && (
+                                  <Tag size="sm" variant="outline" colorScheme="red">
+                                    {refund.gateway_refund_id}
+                                  </Tag>
+                                )}
+                              </VStack>
+                            </Td>
+                            <Td>
+                              <VStack align="start" spacing={1}>
+                                <Text fontSize="sm" color="primary.500">
+                                  {refund.merchant_order_id}
+                                </Text>
+                                <Text fontSize="xs" color="gray.500">
+                                  原金额: {formatCurrency(refund.original_amount / 100, refund.currency)}
+                                </Text>
+                              </VStack>
+                            </Td>
+                            <Td>
+                              <Text fontSize="sm" fontFamily="mono">
+                                {refund.app_id}
+                              </Text>
+                            </Td>
+                            <Td>
+                              <Text fontWeight="semibold" color="red.500">
+                                -{formatCurrency(refund.refund_amount / 100, refund.currency)}
+                              </Text>
+                            </Td>
+                            <Td>
+                              <Text fontSize="sm" noOfLines={2}>
+                                {refund.reason || '无'}
+                              </Text>
+                            </Td>
+                            <Td>
+                              {getStatusBadge(refund.status)}
+                            </Td>
+                            <Td>
+                              <Text fontSize="sm">
+                                {formatDate(refund.created_at)}
+                              </Text>
+                            </Td>
+                            <Td>
+                              <Menu>
+                                <MenuButton
+                                  as={IconButton}
+                                  icon={<RiMoreLine />}
+                                  variant="ghost"
+                                  size="sm"
+                                />
+                                <MenuList>
+                                  <MenuItem icon={<RiEyeLine />}>
+                                    查看详情
+                                  </MenuItem>
+                                  <MenuItem icon={<RiDownloadLine />}>
+                                    导出记录
+                                  </MenuItem>
+                                </MenuList>
+                              </Menu>
+                            </Td>
+                          </Tr>
+                        ))}
+                      </Tbody>
+                    </Table>
+                  </TableContainer>
+                )
               )}
             </VStack>
           </Card>

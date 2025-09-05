@@ -17,11 +17,14 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // 默认管理员账户
-    if (email === 'admin' && password === 'admin123') {
+    // 默认管理员账户（从环境变量获取）
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@loomi.com'
+    const adminPassword = process.env.ADMIN_PASSWORD
+    
+    if (adminPassword && email === adminEmail && password === adminPassword) {
       const authUser = {
         id: 'admin-001',
-        email: 'admin@loomi.com',
+        email: adminEmail,
         username: 'admin',
         role: 'admin'
       }

@@ -278,12 +278,15 @@ export default function LoginPage() {
                     </Link>
                   </HStack>
 
-                  {/* Default Admin Info */}
+                  {/* Login Info */}
                   <Alert status="info" borderRadius="md">
                     <AlertIcon />
                     <VStack align="start" spacing={1} fontSize="sm">
-                      <Text fontWeight="medium">默认管理员账户:</Text>
-                      <Text>用户名: <code>admin</code> | 密码: <code>admin123</code></Text>
+                      <Text fontWeight="medium">登录说明:</Text>
+                      <Text>管理员账户请联系系统管理员获取登录凭据</Text>
+                      <Text fontSize="xs" color="gray.500">
+                        开发环境: 请检查环境变量 ADMIN_EMAIL 和 ADMIN_PASSWORD
+                      </Text>
                     </VStack>
                   </Alert>
 
