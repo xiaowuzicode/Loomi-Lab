@@ -1,7 +1,7 @@
 #!/bin/bash
 
-echo "🚀 启动 Loomi-Lab 智能体管理平台"
-echo "================================"
+echo "🚀 启动 Loomi-Lab 智能体管理平台 (清除缓存版)"
+echo "================================================"
 
 # 检查 Node.js 版本
 if ! command -v node &> /dev/null; then
@@ -11,10 +11,19 @@ fi
 
 echo "📦 Node.js 版本: $(node --version)"
 
+# 清除Next.js编译缓存（保留node_modules以提升启动速度）
+echo "🧹 清除编译缓存..."
+rm -rf .next
+rm -rf .turbo
+rm -rf node_modules/.cache/webpack 2>/dev/null || true
+rm -rf node_modules/.cache/babel-loader 2>/dev/null || true
+
 # 检查依赖是否已安装
 if [ ! -d "node_modules" ]; then
     echo "📥 安装依赖..."
     npm install
+else
+    echo "✅ 依赖已安装，跳过包安装步骤"
 fi
 
 # 端口与日志配置
@@ -68,8 +77,9 @@ echo "   - 修改代码后会自动热重载"
 echo "   - 默认使用深色主题"
 echo ""
 
-# 启动 Next.js 开发服务器（绑定 0.0.0.0，并后台运行）
-nohup npm run dev -- -H 0.0.0.0 -p "$PORT" >> "$LOG_FILE" 2>&1 &
+# 启动 Next.js 开发服务器（绑定 0.0.0.0，并后台运行，清除缓存）
+export NODE_ENV=development
+nohup npx next dev --turbo -H 0.0.0.0 -p "$PORT" >> "$LOG_FILE" 2>&1 &
 echo $! > "$PID_FILE"
 echo "$PORT" > "$PORT_FILE"
 echo "✅ 已后台启动，PID: $(cat "$PID_FILE")"
