@@ -62,6 +62,31 @@ export function useAuth() {
     initAuth()
   }, [])
 
+  // 检查token是否有效
+  const checkTokenValidity = useCallback(async (token: string) => {
+    try {
+      const response = await fetch('/api/auth/verify', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+      
+      if (!response.ok) {
+        // Token失效，清除本地数据
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('auth_user')
+        document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+        
+        return false
+      }
+      
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
   // 登录
   const login = useCallback(async (credentials: LoginRequest) => {
     try {

@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     if (!email || !password) {
       return NextResponse.json<ApiResponse>({
         success: false,
-        error: '邮箱和密码不能为空'
+        error: '用户名和密码不能为空'
       }, { status: 400 })
     }
 
@@ -22,28 +22,37 @@ export async function POST(request: NextRequest) {
     const adminUsername = process.env.ADMIN_EMAIL || 'loomiadmin'
     const adminPassword = process.env.ADMIN_PASSWORD
     
-    if (adminPassword && email === adminUsername && verifyPlainPassword(password, adminPassword)) {
-      const authUser = {
-        id: 'admin-001',
-        email: 'admin@loomi.com',
-        username: adminUsername,
-        role: 'admin'
-      }
-      
-      const token = generateToken(authUser)
+    // 先检查是否为管理员账户登录
+    if (adminPassword && email === adminUsername) {
+      if (verifyPlainPassword(password, adminPassword)) {
+        const authUser = {
+          id: 'admin-001',
+          email: 'admin@loomi.com',
+          username: adminUsername,
+          role: 'admin'
+        }
+        
+        const token = generateToken(authUser)
 
-      const response: LoginResponse = {
-        user: authUser,
-        token
-      }
+        const response: LoginResponse = {
+          user: authUser,
+          token
+        }
 
-      return NextResponse.json<ApiResponse<LoginResponse>>({
-        success: true,
-        data: response,
-        message: '登录成功'
-      })
+        return NextResponse.json<ApiResponse<LoginResponse>>({
+          success: true,
+          data: response,
+          message: '登录成功'
+        })
+      } else {
+        return NextResponse.json<ApiResponse>({
+          success: false,
+          error: '管理员密码错误'
+        }, { status: 401 })
+      }
     }
 
+    // 对于普通用户，检查邮箱格式
     if (!isValidEmail(email)) {
       return NextResponse.json<ApiResponse>({
         success: false,
