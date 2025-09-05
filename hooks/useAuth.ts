@@ -26,11 +26,14 @@ export function useAuth() {
   // 初始化认证状态
   useEffect(() => {
     const initAuth = () => {
-      const token = localStorage.getItem('auth_token')
-      const userStr = localStorage.getItem('auth_user')
+      // 确保只在客户端执行
+      if (typeof window === 'undefined') return
       
-      if (token && userStr) {
-        try {
+      try {
+        const token = localStorage.getItem('auth_token')
+        const userStr = localStorage.getItem('auth_user')
+        
+        if (token && userStr) {
           const user = JSON.parse(userStr) as AuthUser
           setAuthState({
             user,
@@ -38,16 +41,17 @@ export function useAuth() {
             isLoading: false,
             isAuthenticated: true
           })
-        } catch (error) {
-          // 清除无效数据
-          localStorage.removeItem('auth_token')
-          localStorage.removeItem('auth_user')
+        } else {
           setAuthState(prev => ({
             ...prev,
             isLoading: false
           }))
         }
-      } else {
+      } catch (error) {
+        console.error('Auth initialization error:', error)
+        // 清除无效数据
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('auth_user')
         setAuthState(prev => ({
           ...prev,
           isLoading: false
@@ -74,9 +78,12 @@ export function useAuth() {
       if (result.success && result.data) {
         const { user, token } = result.data
         
-        // 保存到localStorage
+        // 保存到localStorage和cookie
         localStorage.setItem('auth_token', token)
         localStorage.setItem('auth_user', JSON.stringify(user))
+        
+        // 设置cookie（7天有效期，用于中间件验证）
+        document.cookie = `auth_token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; secure; samesite=strict`
         
         // 更新状态
         setAuthState({
@@ -122,9 +129,12 @@ export function useAuth() {
 
   // 退出登录
   const logout = useCallback(() => {
-    // 清除存储
+    // 清除存储和cookie
     localStorage.removeItem('auth_token')
     localStorage.removeItem('auth_user')
+    
+    // 清除cookie
+    document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
     
     // 重置状态
     setAuthState({

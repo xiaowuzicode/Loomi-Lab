@@ -23,7 +23,7 @@ import {
   AlertIcon,
 } from '@chakra-ui/react'
 import { motion } from 'framer-motion'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   RiEyeLine,
@@ -52,11 +52,12 @@ export default function LoginPage() {
   const toast = useToast()
   const { login, isAuthenticated } = useAuth()
 
-  // 如果已经登录，重定向到仪表板
-  if (isAuthenticated) {
-    router.push('/dashboard')
-    return null
-  }
+  // 如果已经登录，重定向到仪表板（使用 useEffect 避免 hydration 问题）
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push('/dashboard')
+    }
+  }, [isAuthenticated, router])
 
   const bgGradient = useColorModeValue(
     'linear(to-br, blue.50, purple.50, pink.50)',
@@ -283,9 +284,9 @@ export default function LoginPage() {
                     <AlertIcon />
                     <VStack align="start" spacing={1} fontSize="sm">
                       <Text fontWeight="medium">登录说明:</Text>
-                      <Text>管理员账户请联系系统管理员获取登录凭据</Text>
-                      <Text fontSize="xs" color="gray.500">
-                        开发环境: 请检查环境变量 ADMIN_EMAIL 和 ADMIN_PASSWORD
+                      <Text>请联系系统管理员获取登录凭据</Text>
+                      <Text fontSize="xs" color="gray.500" mt={1}>
+                        如需重置密码或遇到登录问题，请联系技术支持
                       </Text>
                     </VStack>
                   </Alert>

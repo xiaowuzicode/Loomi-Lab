@@ -1,10 +1,17 @@
 import jwt from 'jsonwebtoken'
-import bcrypt from 'bcrypt'
 import { NextRequest } from 'next/server'
 import type { AuthUser } from '@/types'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
-const SALT_ROUNDS = 10
+// 使用密码哈希作为JWT密钥的一部分，确保密码修改后Token失效
+const getJWTSecret = () => {
+  const baseSecret = process.env.JWT_SECRET || 'your-secret-key'
+  const adminPassword = process.env.ADMIN_PASSWORD || ''
+  // 结合基础密钥和管理员密码生成最终的JWT密钥
+  // 这样当管理员密码变更时，所有现有Token都会失效
+  return `${baseSecret}_${adminPassword}`
+}
+
+// 移除了 bcrypt 相关的常量，密码验证将在 API 路由中处理
 
 // JWT 相关函数
 export function generateToken(user: AuthUser): string {
@@ -15,31 +22,23 @@ export function generateToken(user: AuthUser): string {
       username: user.username,
       role: user.role,
     },
-    JWT_SECRET,
+    getJWTSecret(),
     { expiresIn: '7d' }
   )
 }
 
 export function verifyToken(token: string): AuthUser | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as AuthUser
+    const decoded = jwt.verify(token, getJWTSecret()) as AuthUser
     return decoded
   } catch (error) {
+    // Token验证失败（包括密码变更导致的失效）
     return null
   }
 }
 
-// 密码相关函数
-export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, SALT_ROUNDS)
-}
-
-export async function comparePassword(
-  password: string,
-  hashedPassword: string
-): Promise<boolean> {
-  return bcrypt.compare(password, hashedPassword)
-}
+// 密码相关函数 - 移到单独的服务端模块
+// 这些函数将在 API 路由中使用，不在中间件中调用
 
 // 从请求中获取用户信息
 export function getUserFromRequest(request: NextRequest): AuthUser | null {

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import {
   Box,
@@ -76,7 +75,6 @@ interface DashboardStats {
 
 export default function DashboardPage() {
   const titleColor = useColorModeValue('gray.800', 'white')
-  const router = useRouter()
   const { token, isAuthenticated, isLoading: authLoading } = useAuth()
   
   // 状态管理
@@ -218,7 +216,7 @@ export default function DashboardPage() {
           <Button 
             colorScheme="primary" 
             size="lg" 
-            onClick={() => router.push('/login')}
+            onClick={() => window.location.href = '/login'}
           >
             前往登录
           </Button>

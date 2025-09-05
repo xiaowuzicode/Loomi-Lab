@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase, TABLES } from '@/lib/db'
-import { generateToken, comparePassword } from '@/lib/auth'
+import { generateToken } from '@/lib/auth'
+import { verifyPlainPassword, comparePassword } from '@/lib/password'
 import { isValidEmail } from '@/lib/utils'
 import type { LoginRequest, LoginResponse, ApiResponse } from '@/types'
 
@@ -18,14 +19,14 @@ export async function POST(request: NextRequest) {
     }
 
     // 默认管理员账户（从环境变量获取）
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@loomi.com'
+    const adminUsername = process.env.ADMIN_EMAIL || 'loomiadmin'
     const adminPassword = process.env.ADMIN_PASSWORD
     
-    if (adminPassword && email === adminEmail && password === adminPassword) {
+    if (adminPassword && email === adminUsername && verifyPlainPassword(password, adminPassword)) {
       const authUser = {
         id: 'admin-001',
-        email: adminEmail,
-        username: 'admin',
+        email: 'admin@loomi.com',
+        username: adminUsername,
         role: 'admin'
       }
       
