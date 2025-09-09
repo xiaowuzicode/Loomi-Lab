@@ -58,8 +58,8 @@ export function useCustomFields() {
       if (params.visibility !== undefined) searchParams.set('visibility', String(params.visibility))
       if (params.isPublic !== undefined) searchParams.set('isPublic', String(params.isPublic))
 
-      // 从localStorage获取token
-      const token = localStorage.getItem('token')
+      // 从localStorage获取token（修复key不匹配问题）
+      const token = localStorage.getItem('auth_token')
       const headers: HeadersInit = {
         'Content-Type': 'application/json'
       }
@@ -109,7 +109,7 @@ export function useCustomFields() {
   const fetchStats = useCallback(async () => {
     setStatsLoading(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       const headers: HeadersInit = {
         'Content-Type': 'application/json'
       }
@@ -155,7 +155,7 @@ export function useCustomFields() {
   // 根据ID获取单条记录
   const fetchCustomFieldById = useCallback(async (id: string): Promise<CustomFieldRecord | null> => {
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       const headers: HeadersInit = {
         'Content-Type': 'application/json'
       }
@@ -189,7 +189,7 @@ export function useCustomFields() {
   // 创建自定义字段记录
   const createCustomField = useCallback(async (formData: CustomFieldForm & { type: string }): Promise<CustomFieldRecord | null> => {
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       if (!token) {
         throw new Error('请先登录')
       }
@@ -237,7 +237,7 @@ export function useCustomFields() {
   // 更新自定义字段记录
   const updateCustomField = useCallback(async (id: string, updates: Partial<CustomFieldForm>): Promise<CustomFieldRecord | null> => {
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       if (!token) {
         throw new Error('请先登录')
       }
@@ -287,7 +287,7 @@ export function useCustomFields() {
   // 删除自定义字段记录 (软删除)
   const deleteCustomField = useCallback(async (id: string): Promise<boolean> => {
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       if (!token) {
         throw new Error('请先登录')
       }

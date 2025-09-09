@@ -656,10 +656,10 @@ export class CustomFieldStorage {
         .select('*', { count: 'exact' })
         .eq('is_deleted', false) // 软删除过滤
 
-      // 用户权限过滤
-      if (userId) {
-        query = query.eq('user_id', userId)
-      }
+      // 用户权限过滤 - 对于自定义字段管理，显示所有用户的记录
+      // if (userId) {
+      //   query = query.eq('user_id', userId)
+      // }
 
       // 类型筛选
       if (type !== 'all') {
@@ -718,7 +718,7 @@ export class CustomFieldStorage {
       const totalCount = count || 0
       const totalPages = Math.ceil(totalCount / limit)
 
-      // 转换数据格式（异步处理）
+      // 转换数据格式
       const records = await Promise.all((data || []).map(record => this.transformCustomFieldData(record)))
 
       return {
@@ -894,10 +894,10 @@ export class CustomFieldStorage {
         .select('app_code')
         .eq('is_deleted', false)
 
-      // 用户权限过滤
-      if (userId) {
-        query = query.eq('user_id', userId)
-      }
+      // 用户权限过滤 - 显示所有用户的记录
+      // if (userId) {
+      //   query = query.eq('user_id', userId)
+      // }
 
       const { data, error } = await query
 
@@ -926,10 +926,10 @@ export class CustomFieldStorage {
         .select('type', { count: 'exact' })
         .eq('is_deleted', false)
 
-      // 用户权限过滤
-      if (userId) {
-        baseQuery = baseQuery.eq('user_id', userId)
-      }
+      // 用户权限过滤 - 统计所有用户的记录
+      // if (userId) {
+      //   baseQuery = baseQuery.eq('user_id', userId)
+      // }
 
       // 分别统计三种类型
       const [insightResult, hookResult, emotionResult] = await Promise.all([
@@ -968,34 +968,27 @@ export class CustomFieldStorage {
   }
 
   /**
-   * 获取用户显示名称
-   */
-  private async getUserDisplayName(userId: string): Promise<string> {
-    if (userId === 'admin-001') {
-      return '管理员'
-    }
-    
-    try {
-      // 使用UserStorage来查询用户信息
-      const user = await userStorage.getUserById(userId)
-      return user?.name || userId
-    } catch (error) {
-      console.error('获取用户信息失败:', error)
-      return userId
-    }
-  }
-
-  /**
    * 转换自定义字段数据格式
    */
   private async transformCustomFieldData(record: any) {
-    const createdUserName = await this.getUserDisplayName(record.created_user_id)
+    // 对于自定义字段系统：管理员UUID显示为管理员，其他用户查询真实姓名
+    let createdUserName: string
+    if (record.created_user_id === '00000000-0000-0000-0000-000000000001') {
+      createdUserName = '管理员'
+    } else {
+      try {
+        const user = await userStorage.getUserById(record.created_user_id)
+        createdUserName = user?.name || record.created_user_id
+      } catch (error) {
+        createdUserName = record.created_user_id
+      }
+    }
 
     return {
       id: record.id,
       userId: record.user_id,
       createdUserId: record.created_user_id,
-      createdUserName, // 显示真实用户名或"管理员"
+      createdUserName,
       appCode: record.app_code,
       type: record.type,
       extendedField: record.extended_field || [],
