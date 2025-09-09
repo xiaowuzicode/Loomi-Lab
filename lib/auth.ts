@@ -2,10 +2,13 @@ import jwt from 'jsonwebtoken'
 import { NextRequest } from 'next/server'
 import type { AuthUser } from '@/types'
 
-// JWT密钥获取 - 使用固定的JWT_SECRET确保token验证一致性
+// 使用密码哈希作为JWT密钥的一部分，确保密码修改后Token失效
 const getJWTSecret = () => {
-  const jwtSecret = process.env.JWT_SECRET || 'your-secret-key'
-  return jwtSecret
+  const baseSecret = process.env.JWT_SECRET || 'your-secret-key'
+  const adminPassword = process.env.ADMIN_PASSWORD || ''
+  // 结合基础密钥和管理员密码生成最终的JWT密钥
+  // 这样当管理员密码变更时，所有现有Token都会失效
+  return `${baseSecret}_${adminPassword}`
 }
 
 // 移除了 bcrypt 相关的常量，密码验证将在 API 路由中处理
