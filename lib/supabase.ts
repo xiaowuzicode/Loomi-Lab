@@ -751,13 +751,13 @@ export class CustomFieldStorage {
         .eq('id', id)
         .eq('is_deleted', false)
 
-      // 权限控制: 只能查看自己的或公开的数据
-      if (userId) {
-        query = query.or(
-          `user_id.eq.${userId},` +
-          `and(visibility.eq.true,is_public.eq.true)`
-        )
-      }
+      // 权限控制: 管理员可以查看所有记录
+      // if (userId) {
+      //   query = query.or(
+      //     `user_id.eq.${userId},` +
+      //     `and(visibility.eq.true,is_public.eq.true)`
+      //   )
+      // }
 
       const { data, error } = await query.single()
 
@@ -846,7 +846,7 @@ export class CustomFieldStorage {
         .from('book_user_custom_fields')
         .update(updateData)
         .eq('id', id)
-        .eq('user_id', userId) // 权限控制: 只能更新自己的数据
+        // .eq('user_id', userId) // 移除权限控制：管理员可以更新所有记录
         .eq('is_deleted', false)
         .select()
         .single()
@@ -871,7 +871,7 @@ export class CustomFieldStorage {
           updated_at: new Date().toISOString()
         })
         .eq('id', id)
-        .eq('user_id', userId) // 权限控制: 只能删除自己的数据
+        // .eq('user_id', userId) // 移除权限控制：管理员可以删除所有记录
         .eq('is_deleted', false)
         .select()
         .single()
