@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
         const authUser = {
           id: 'admin-001',
           email: 'admin@loomi.com',
-          username: adminUsername,
+          username: '管理员',
           role: 'admin'
         }
         

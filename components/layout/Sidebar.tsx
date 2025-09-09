@@ -27,6 +27,7 @@ import {
   RiSparklingFill,
   RiMessageLine,
   RiLightbulbLine,
+  RiDatabase2Line,
 } from 'react-icons/ri'
 
 // const Box = Box // 暂时移除动画
@@ -90,6 +91,12 @@ const getNavItems = (userCount: number): NavItem[] => [
     href: '/prompts',
     icon: RiQuillPenLine,
     color: 'cyan.400',
+  },
+  {
+    label: '自定义字段管理',
+    href: '/custom-fields',
+    icon: RiDatabase2Line,
+    color: 'teal.400',
   },
   {
     label: '用户消息查询',
@@ -195,7 +202,7 @@ export function Sidebar({ isCollapsed = false }: SidebarProps) {
 
         {/* Navigation */}
         <VStack spacing={2} p={4} flex={1} align="stretch">
-          {navItems.map((item, index) => {
+          {navItems.map((item) => {
             const isActive = pathname === item.href
             const activeColor = useColorModeValue('primary.500', 'primary.400')
             const hoverBg = useColorModeValue('gray.100', 'gray.800')

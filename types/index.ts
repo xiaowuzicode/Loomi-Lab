@@ -255,3 +255,71 @@ export interface SystemConfig {
   category: string
   updatedAt: Date
 }
+
+// 自定义字段管理相关类型
+export interface CustomField {
+  key: string
+  label: string
+  value: string // 目前统一为字符串类型
+  type?: 'text' // 目前只支持文本类型
+  required?: boolean
+}
+
+export interface CustomFieldRecord {
+  id: string
+  userId: string
+  createdUserId: string
+  createdUserName: string // 创建者显示名称
+  appCode: string
+  type: '洞察' | '钩子' | '情绪'
+  extendedField: CustomField[]
+  amount: number // 前端显示的实际金额 (元)
+  postIds: string[]
+  visibility: boolean
+  isPublic: boolean
+  exampleData?: string
+  readme: string
+  isDeleted: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CustomFieldForm {
+  appCode: string
+  amount: number
+  readme: string
+  exampleData?: string
+  visibility: boolean
+  isPublic: boolean
+  extendedField: CustomField[]
+}
+
+export interface CustomFieldInput {
+  key: string
+  label: string
+  value: string
+  removable: boolean // 是否可删除 (标题不可删除)
+}
+
+export interface CustomFieldStats {
+  洞察: number
+  钩子: number
+  情绪: number
+  总计: number
+}
+
+export interface CustomFieldListParams {
+  page?: number
+  limit?: number
+  search?: string
+  type?: '洞察' | '钩子' | '情绪' | 'all'
+  appCode?: string
+  amountMin?: number
+  amountMax?: number
+  dateFrom?: string
+  dateTo?: string
+  visibility?: boolean
+  isPublic?: boolean
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+}

@@ -607,3 +607,410 @@ export class PaymentStorage {
 }
 
 export const paymentStorage = new PaymentStorage(supabaseServiceRole)
+
+// 自定义字段管理服务
+export class CustomFieldStorage {
+  constructor(private supabase: SupabaseClient<any, any, any>) {}
+
+  /**
+   * 获取自定义字段列表（分页+筛选）
+   */
+  async getCustomFields(options: {
+    page?: number
+    limit?: number
+    search?: string
+    type?: string
+    appCode?: string
+    userId?: string
+    visibility?: boolean
+    isPublic?: boolean
+    amountMin?: number
+    amountMax?: number
+    dateFrom?: string
+    dateTo?: string
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+  } = {}) {
+    try {
+      const { 
+        page = 1, 
+        limit = 10, 
+        search = '', 
+        type = 'all', 
+        appCode,
+        userId,
+        visibility,
+        isPublic,
+        amountMin,
+        amountMax,
+        dateFrom,
+        dateTo,
+        sortBy = 'created_at',
+        sortOrder = 'desc'
+      } = options
+      const offset = (page - 1) * limit
+
+      // 构建基础查询
+      let query = this.supabase
+        .from('book_user_custom_fields')
+        .select('*', { count: 'exact' })
+        .eq('is_deleted', false) // 软删除过滤
+
+      // 用户权限过滤
+      if (userId) {
+        query = query.eq('user_id', userId)
+      }
+
+      // 类型筛选
+      if (type !== 'all') {
+        query = query.eq('type', type)
+      }
+
+      // 应用代码筛选
+      if (appCode) {
+        query = query.eq('app_code', appCode)
+      }
+
+      // 可见性筛选
+      if (visibility !== undefined) {
+        query = query.eq('visibility', visibility)
+      }
+
+      // 公开性筛选
+      if (isPublic !== undefined) {
+        query = query.eq('is_public', isPublic)
+      }
+
+      // 金额范围筛选
+      if (amountMin !== undefined) {
+        query = query.gte('amount', amountMin * 100) // 转换为分
+      }
+      if (amountMax !== undefined) {
+        query = query.lte('amount', amountMax * 100) // 转换为分
+      }
+
+      // 日期范围筛选
+      if (dateFrom) {
+        query = query.gte('created_at', dateFrom)
+      }
+      if (dateTo) {
+        query = query.lte('created_at', dateTo)
+      }
+
+      // 搜索功能 (搜索标题和readme字段)
+      if (search && search.trim() !== '') {
+        query = query.or(
+          `readme.ilike.%${search}%,` +
+          `extended_field->>title.ilike.%${search}%`
+        )
+      }
+
+      // 排序
+      const ascending = sortOrder === 'asc'
+      query = query.order(sortBy, { ascending })
+
+      // 分页
+      const { data, error, count } = await query.range(offset, offset + limit - 1)
+
+      if (error) throw error
+
+      // 获取总数
+      const totalCount = count || 0
+      const totalPages = Math.ceil(totalCount / limit)
+
+      // 转换数据格式（异步处理）
+      const records = await Promise.all((data || []).map(record => this.transformCustomFieldData(record)))
+
+      return {
+        records,
+        total: totalCount,
+        page,
+        limit,
+        totalPages
+      }
+    } catch (error) {
+      console.error('获取自定义字段列表失败:', error)
+      return {
+        records: [],
+        total: 0,
+        page: options.page || 1,
+        limit: options.limit || 10,
+        totalPages: 0
+      }
+    }
+  }
+
+  /**
+   * 根据ID获取单条记录
+   */
+  async getCustomFieldById(id: string, userId?: string) {
+    try {
+      let query = this.supabase
+        .from('book_user_custom_fields')
+        .select('*')
+        .eq('id', id)
+        .eq('is_deleted', false)
+
+      // 权限控制: 只能查看自己的或公开的数据
+      if (userId) {
+        query = query.or(
+          `user_id.eq.${userId},` +
+          `and(visibility.eq.true,is_public.eq.true)`
+        )
+      }
+
+      const { data, error } = await query.single()
+
+      if (error) throw error
+      return await this.transformCustomFieldData(data)
+    } catch (error) {
+      console.error('获取自定义字段详情失败:', error)
+      return null
+    }
+  }
+
+  /**
+   * 创建自定义字段记录
+   */
+  async createCustomField(record: {
+    userId: string
+    createdUserId: string
+    appCode: string
+    type: string
+    extendedField: any[]
+    amount: number
+    readme: string
+    exampleData?: string
+    visibility: boolean
+    isPublic: boolean
+  }) {
+    try {
+      const { data, error } = await this.supabase
+        .from('book_user_custom_fields')
+        .insert({
+          user_id: record.userId,
+          created_user_id: record.createdUserId,
+          app_code: record.appCode,
+          type: record.type,
+          extended_field: record.extendedField,
+          amount: record.amount, // 前端已转换为分
+          readme: record.readme,
+          example_data: record.exampleData,
+          visibility: record.visibility,
+          is_public: record.isPublic,
+          post_ids: [], // 默认空数组
+          is_deleted: false
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+      return await this.transformCustomFieldData(data)
+    } catch (error) {
+      console.error('创建自定义字段失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 更新自定义字段记录
+   */
+  async updateCustomField(
+    id: string, 
+    userId: string, 
+    updates: Partial<{
+      appCode: string
+      extendedField: any[]
+      amount: number
+      readme: string
+      exampleData: string
+      visibility: boolean
+      isPublic: boolean
+    }>
+  ) {
+    try {
+      const updateData: any = {
+        updated_at: new Date().toISOString()
+      }
+
+      // 只更新提供的字段
+      if (updates.appCode !== undefined) updateData.app_code = updates.appCode
+      if (updates.extendedField !== undefined) updateData.extended_field = updates.extendedField
+      if (updates.amount !== undefined) updateData.amount = updates.amount
+      if (updates.readme !== undefined) updateData.readme = updates.readme
+      if (updates.exampleData !== undefined) updateData.example_data = updates.exampleData
+      if (updates.visibility !== undefined) updateData.visibility = updates.visibility
+      if (updates.isPublic !== undefined) updateData.is_public = updates.isPublic
+
+      const { data, error } = await this.supabase
+        .from('book_user_custom_fields')
+        .update(updateData)
+        .eq('id', id)
+        .eq('user_id', userId) // 权限控制: 只能更新自己的数据
+        .eq('is_deleted', false)
+        .select()
+        .single()
+
+      if (error) throw error
+      return await this.transformCustomFieldData(data)
+    } catch (error) {
+      console.error('更新自定义字段失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 软删除自定义字段记录
+   */
+  async deleteCustomField(id: string, userId: string) {
+    try {
+      const { data, error } = await this.supabase
+        .from('book_user_custom_fields')
+        .update({
+          is_deleted: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .eq('user_id', userId) // 权限控制: 只能删除自己的数据
+        .eq('is_deleted', false)
+        .select()
+        .single()
+
+      if (error) throw error
+      return await this.transformCustomFieldData(data)
+    } catch (error) {
+      console.error('删除自定义字段失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 获取所有可用的应用代码 (备用功能，暂不使用)
+   */
+  async getAvailableAppCodes(userId?: string) {
+    try {
+      let query = this.supabase
+        .from('book_user_custom_fields')
+        .select('app_code')
+        .eq('is_deleted', false)
+
+      // 用户权限过滤
+      if (userId) {
+        query = query.eq('user_id', userId)
+      }
+
+      const { data, error } = await query
+
+      if (error) throw error
+
+      // 去重并排序
+      const uniqueAppCodes = [...new Set((data || []).map(record => record.app_code))]
+        .filter(code => code && code.trim() !== '')
+        .sort()
+
+      return uniqueAppCodes
+    } catch (error) {
+      console.error('获取应用代码失败:', error)
+      // 返回默认值
+      return ['loomi']
+    }
+  }
+
+  /**
+   * 获取统计信息
+   */
+  async getStats(userId?: string) {
+    try {
+      let baseQuery = this.supabase
+        .from('book_user_custom_fields')
+        .select('type', { count: 'exact' })
+        .eq('is_deleted', false)
+
+      // 用户权限过滤
+      if (userId) {
+        baseQuery = baseQuery.eq('user_id', userId)
+      }
+
+      // 分别统计三种类型
+      const [insightResult, hookResult, emotionResult] = await Promise.all([
+        this.supabase.from('book_user_custom_fields')
+          .select('*', { count: 'exact', head: true })
+          .eq('type', '洞察')
+          .eq('is_deleted', false)
+          .then(r => ({ count: r.count || 0 })),
+        this.supabase.from('book_user_custom_fields')
+          .select('*', { count: 'exact', head: true })
+          .eq('type', '钩子')
+          .eq('is_deleted', false)
+          .then(r => ({ count: r.count || 0 })),
+        this.supabase.from('book_user_custom_fields')
+          .select('*', { count: 'exact', head: true })
+          .eq('type', '情绪')
+          .eq('is_deleted', false)
+          .then(r => ({ count: r.count || 0 }))
+      ])
+
+      return {
+        洞察: insightResult.count,
+        钩子: hookResult.count,
+        情绪: emotionResult.count,
+        总计: insightResult.count + hookResult.count + emotionResult.count
+      }
+    } catch (error) {
+      console.error('获取统计信息失败:', error)
+      return {
+        洞察: 0,
+        钩子: 0,
+        情绪: 0,
+        总计: 0
+      }
+    }
+  }
+
+  /**
+   * 获取用户显示名称
+   */
+  private async getUserDisplayName(userId: string): Promise<string> {
+    if (userId === 'admin-001') {
+      return '管理员'
+    }
+    
+    try {
+      // 使用UserStorage来查询用户信息
+      const user = await userStorage.getUserById(userId)
+      return user?.name || userId
+    } catch (error) {
+      console.error('获取用户信息失败:', error)
+      return userId
+    }
+  }
+
+  /**
+   * 转换自定义字段数据格式
+   */
+  private async transformCustomFieldData(record: any) {
+    const createdUserName = await this.getUserDisplayName(record.created_user_id)
+
+    return {
+      id: record.id,
+      userId: record.user_id,
+      createdUserId: record.created_user_id,
+      createdUserName, // 显示真实用户名或"管理员"
+      appCode: record.app_code,
+      type: record.type,
+      extendedField: record.extended_field || [],
+      amount: record.amount / 100, // 转换为元
+      postIds: record.post_ids || [],
+      visibility: record.visibility,
+      isPublic: record.is_public,
+      exampleData: record.example_data,
+      readme: record.readme,
+      isDeleted: record.is_deleted,
+      createdAt: record.created_at,
+      updatedAt: record.updated_at
+    }
+  }
+}
+
+// 创建全局实例
+export const customFieldStorage = new CustomFieldStorage(supabaseServiceRole)
