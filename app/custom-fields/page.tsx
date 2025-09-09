@@ -67,6 +67,7 @@ import {
   RiHeart3Line,
   RiSparklingFill,
   RiCloseLine,
+  RiUser3Line,
 } from 'react-icons/ri'
 import { PageLayout } from '@/components/layout/PageLayout'
 import { Card } from '@/components/ui/Card'
@@ -93,6 +94,7 @@ const TYPE_COLORS = {
 export default function CustomFieldsPage() {
   const [selectedType, setSelectedType] = useState<'洞察' | '钩子' | '情绪' | 'all'>('洞察')
   const [searchTerm, setSearchTerm] = useState('')
+  const [userSearchTerm, setUserSearchTerm] = useState('')
   const [amountRange, setAmountRange] = useState({ min: '', max: '' })
   const [dateRange, setDateRange] = useState({ from: '', to: '' })
   const [currentPage, setCurrentPage] = useState(1)
@@ -155,6 +157,7 @@ export default function CustomFieldsPage() {
       page: currentPage,
       limit: pageSize,
       search: searchTerm,
+      userSearch: userSearchTerm,
       type: selectedType,
       amountMin: amountRange.min ? parseFloat(amountRange.min) : undefined,
       amountMax: amountRange.max ? parseFloat(amountRange.max) : undefined,
@@ -181,6 +184,7 @@ export default function CustomFieldsPage() {
   // 重置搜索
   const handleReset = () => {
     setSearchTerm('')
+    setUserSearchTerm('')
     setAmountRange({ min: '', max: '' })
     setDateRange({ from: '', to: '' })
     setCurrentPage(1)
@@ -249,9 +253,7 @@ export default function CustomFieldsPage() {
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {}
 
-    if (!form.appCode.trim()) {
-      errors.appCode = '应用代码不能为空'
-    }
+    // 应用代码是可选的，不需要验证
 
     if (!form.readme.trim() || form.readme.trim().length < 10) {
       errors.readme = '说明文档至少需要10个字符'
@@ -419,20 +421,35 @@ export default function CustomFieldsPage() {
             </Flex>
 
             {/* 搜索和筛选 */}
-            <Grid templateColumns="1fr auto auto auto" gap={4}>
-              <InputGroup>
-                <InputLeftElement pointerEvents="none">
-                  <RiSearchLine color="gray.400" />
-                </InputLeftElement>
-                <Input
-                  placeholder="搜索标题或内容..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                />
-              </InputGroup>
-
-              <HStack spacing={2}>
+            <VStack spacing={3} align="stretch">
+              <HStack spacing={4}>
+                <InputGroup flex="1">
+                  <InputLeftElement pointerEvents="none">
+                    <RiSearchLine color="gray.400" />
+                  </InputLeftElement>
+                  <Input
+                    placeholder="搜索标题或内容..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  />
+                </InputGroup>
+                
+                <InputGroup flex="1">
+                  <InputLeftElement pointerEvents="none">
+                    <Icon as={RiUser3Line} color="gray.400" />
+                  </InputLeftElement>
+                  <Input
+                    placeholder="搜索用户 (UUID或用户名)..."
+                    value={userSearchTerm}
+                    onChange={(e) => setUserSearchTerm(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  />
+                </InputGroup>
+              </HStack>
+              
+              <HStack justify="space-between">
+                <HStack spacing={2}>
                 <Input
                   size="sm"
                   w="100px"
@@ -454,6 +471,7 @@ export default function CustomFieldsPage() {
                   value={amountRange.max}
                   onChange={(e) => setAmountRange(prev => ({ ...prev, max: e.target.value }))}
                 />
+              </HStack>
               </HStack>
 
               <HStack>
@@ -489,7 +507,7 @@ export default function CustomFieldsPage() {
                   }}
                 />
               </HStack>
-            </Grid>
+            </VStack>
           </Card>
 
           {/* 数据列表 */}
@@ -639,35 +657,7 @@ export default function CustomFieldsPage() {
               <Box>
                 <Text fontWeight="bold" mb={3}>基础信息</Text>
                 
-                <FormControl isInvalid={!!formErrors.appCode} isRequired>
-                  <FormLabel>应用代码</FormLabel>
-                  <Input
-                    value={form.appCode}
-                    onChange={(e) => setForm(prev => ({ ...prev, appCode: e.target.value }))}
-                    placeholder="请输入应用代码，如：loomi"
-                  />
-                  <FormErrorMessage>{formErrors.appCode}</FormErrorMessage>
-                </FormControl>
-
-                <FormControl isInvalid={!!formErrors.amount} mt={4}>
-                  <FormLabel>金额 (元)</FormLabel>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={amountDisplay}
-                    onChange={(e) => {
-                      const inputValue = e.target.value
-                      setAmountDisplay(inputValue)
-                      const numValue = inputValue === '' ? 0 : parseFloat(inputValue) || 0
-                      setForm(prev => ({ ...prev, amount: numValue }))
-                    }}
-                    placeholder="请输入金额，如：199.99"
-                  />
-                  <FormErrorMessage>{formErrors.amount}</FormErrorMessage>
-                </FormControl>
-
-                <FormControl isInvalid={!!formErrors.readme} mt={4} isRequired>
+                <FormControl isInvalid={!!formErrors.readme} isRequired>
                   <FormLabel>📖 说明文档</FormLabel>
                   <Textarea
                     value={form.readme}
@@ -705,6 +695,36 @@ export default function CustomFieldsPage() {
                     />
                   </FormControl>
                 </HStack>
+
+                <Grid templateColumns="1fr 1fr" gap={4} mt={4}>
+                  <FormControl isInvalid={!!formErrors.appCode}>
+                    <FormLabel>应用代码</FormLabel>
+                    <Input
+                      value={form.appCode}
+                      onChange={(e) => setForm(prev => ({ ...prev, appCode: e.target.value }))}
+                      placeholder="请输入应用代码，如：loomi"
+                    />
+                    <FormErrorMessage>{formErrors.appCode}</FormErrorMessage>
+                  </FormControl>
+
+                  <FormControl isInvalid={!!formErrors.amount}>
+                    <FormLabel>金额 (元)</FormLabel>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={amountDisplay}
+                      onChange={(e) => {
+                        const inputValue = e.target.value
+                        setAmountDisplay(inputValue)
+                        const numValue = inputValue === '' ? 0 : parseFloat(inputValue) || 0
+                        setForm(prev => ({ ...prev, amount: numValue }))
+                      }}
+                      placeholder="请输入金额，如：199.99"
+                    />
+                    <FormErrorMessage>{formErrors.amount}</FormErrorMessage>
+                  </FormControl>
+                </Grid>
               </Box>
 
               {/* 扩展字段 */}

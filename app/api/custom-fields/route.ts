@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
       const page = parseInt(searchParams.get('page') || '1')
       const limit = parseInt(searchParams.get('limit') || '10')
       const search = searchParams.get('search') || ''
+      const userSearch = searchParams.get('userSearch') || ''
       const type = searchParams.get('type') || 'all'
       const appCode = searchParams.get('appCode') || ''
       const amountMin = searchParams.get('amountMin') ? parseFloat(searchParams.get('amountMin')!) : undefined
@@ -44,6 +45,7 @@ export async function GET(request: NextRequest) {
         page,
         limit,
         search,
+        userSearch: userSearch || undefined,
         type,
         appCode: appCode || undefined,
         userId,

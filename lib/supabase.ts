@@ -619,6 +619,7 @@ export class CustomFieldStorage {
     page?: number
     limit?: number
     search?: string
+    userSearch?: string
     type?: string
     appCode?: string
     userId?: string
@@ -636,6 +637,7 @@ export class CustomFieldStorage {
         page = 1, 
         limit = 10, 
         search = '', 
+        userSearch = '',
         type = 'all', 
         appCode,
         userId,
@@ -703,6 +705,40 @@ export class CustomFieldStorage {
           `readme.ilike.%${search}%,` +
           `extended_field->>title.ilike.%${search}%`
         )
+      }
+
+      // 用户搜索功能 (根据UUID或用户名搜索)
+      if (userSearch && userSearch.trim() !== '') {
+        const userSearchTerm = userSearch.trim()
+        // 如果看起来像UUID，直接搜索user_id字段
+        if (userSearchTerm.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+          query = query.or(`user_id.eq.${userSearchTerm},created_user_id.eq.${userSearchTerm}`)
+        } else {
+          // 否则使用用户搜索函数查找用户ID
+          try {
+            const { data: users, error } = await this.supabase
+              .rpc('lab_search_users', {
+                search_term: userSearchTerm,
+                result_limit: 100,  // 限制搜索结果数量
+                result_offset: 0
+              })
+            
+            if (!error && users && users.length > 0) {
+              const userIds = users.map((user: any) => user.id)
+              const userIdFilter = userIds.map((id: string) => `user_id.eq.${id},created_user_id.eq.${id}`).join(',')
+              if (userIdFilter) {
+                query = query.or(userIdFilter)
+              }
+            } else {
+              // 如果没有找到用户，返回空结果
+              query = query.eq('user_id', '00000000-0000-0000-0000-000000000000')
+            }
+          } catch (userSearchError) {
+            console.error('用户搜索失败:', userSearchError)
+            // 搜索失败时，返回空结果
+            query = query.eq('user_id', '00000000-0000-0000-0000-000000000000')
+          }
+        }
       }
 
       // 排序

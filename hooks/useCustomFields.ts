@@ -50,6 +50,7 @@ export function useCustomFields() {
       })
 
       // 添加可选参数
+      if (params.userSearch) searchParams.set('userSearch', params.userSearch)
       if (params.appCode) searchParams.set('appCode', params.appCode)
       if (params.amountMin !== undefined) searchParams.set('amountMin', String(params.amountMin))
       if (params.amountMax !== undefined) searchParams.set('amountMax', String(params.amountMax))

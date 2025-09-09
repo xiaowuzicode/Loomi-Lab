@@ -312,6 +312,7 @@ export interface CustomFieldListParams {
   page?: number
   limit?: number
   search?: string
+  userSearch?: string
   type?: '洞察' | '钩子' | '情绪' | 'all'
   appCode?: string
   amountMin?: number
