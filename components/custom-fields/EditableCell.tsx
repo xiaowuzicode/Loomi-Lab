@@ -9,6 +9,7 @@ import {
   IconButton,
   useDisclosure,
   useToast,
+  useColorModeValue,
 } from '@chakra-ui/react'
 import { useState, useRef, useEffect } from 'react'
 import { RiCheckLine, RiCloseLine, RiEditLine } from 'react-icons/ri'
@@ -38,6 +39,12 @@ export function EditableCell({
   const inputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const toast = useToast()
+  
+  // 颜色主题
+  const inputTextColor = useColorModeValue('gray.800', 'white')
+  const inputBgColor = useColorModeValue('white', 'gray.700')
+  const hoverBgColor = useColorModeValue('gray.100', 'whiteAlpha.100')
+  const textColor = useColorModeValue('gray.800', 'white')
 
   useEffect(() => {
     setEditValue(value)
@@ -126,6 +133,8 @@ export function EditableCell({
             size="sm"
             disabled={isLoading}
             placeholder={placeholder}
+            color={inputTextColor}
+            bg={inputBgColor}
           />
         ) : (
           <Textarea
@@ -138,6 +147,8 @@ export function EditableCell({
             resize="vertical"
             disabled={isLoading}
             placeholder={placeholder}
+            color={inputTextColor}
+            bg={inputBgColor}
           />
         )}
         <HStack spacing={1} flexShrink={0}>
@@ -168,7 +179,7 @@ export function EditableCell({
       cursor={disabled ? 'default' : 'pointer'}
       p={2}
       borderRadius="md"
-      _hover={{ bg: disabled ? 'transparent' : 'gray.100' }}
+      _hover={{ bg: disabled ? 'transparent' : hoverBgColor }}
       minH={isTitle ? '32px' : '60px'}
       display="flex"
       alignItems={isTitle ? 'center' : 'flex-start'}
@@ -187,13 +198,14 @@ export function EditableCell({
           noOfLines={isTitle ? 1 : 3}
           wordBreak="break-word"
           w="full"
+          color={textColor}
         >
           {value}
         </Text>
       ) : (
         <Text
           fontSize="sm"
-          color="gray.500"
+          color={useColorModeValue('gray.500', 'gray.400')}
           fontStyle="italic"
           w="full"
         >

@@ -194,13 +194,22 @@ export function useTableCustomFields() {
         throw new Error('请先登录')
       }
 
+      // 转换数据格式以匹配后端API期望的格式
+      const transformedData = {
+        ...formData,
+        extendedField: [
+          // 自动添加标题字段，不需要用户手动输入
+          { key: 'title', label: '标题', value: '标题', required: true }
+        ]
+      }
+
       const response = await fetch('/api/custom-fields', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(transformedData)
       })
 
       const result: ApiResponse<CustomFieldRecord> = await response.json()

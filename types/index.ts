@@ -292,6 +292,7 @@ export interface CustomFieldRecord {
   createdUserName: string // 创建者显示名称
   appCode: string
   type: '洞察' | '钩子' | '情绪'
+  tableName: string // 表名
   extendedField: TableRow[] // 改为表格行数据数组
   tableFields: string[] // 表格字段名列表（用于表头生成）
   amount: number // 前端显示的实际金额 (元)

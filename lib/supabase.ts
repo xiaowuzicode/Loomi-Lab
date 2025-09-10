@@ -813,6 +813,7 @@ export class CustomFieldStorage {
     createdUserId: string
     appCode: string
     type: string
+    tableName: string
     extendedField: any[]
     amount: number
     readme: string
@@ -828,6 +829,7 @@ export class CustomFieldStorage {
           created_user_id: record.createdUserId,
           app_code: record.appCode,
           type: record.type,
+          table_name: record.tableName,
           extended_field: record.extendedField,
           amount: record.amount, // 前端已转换为分
           readme: record.readme,
@@ -1064,6 +1066,7 @@ export class CustomFieldStorage {
       createdUserName,
       appCode: record.app_code,
       type: record.type,
+      tableName: record.table_name || '未命名表格', // 表名字段
       extendedField, // 新格式：TableRow[]
       tableFields,   // 新字段：字段名列表
       amount: record.amount / 100, // 转换为元
@@ -1136,7 +1139,7 @@ export class CustomFieldStorage {
         .from('book_user_custom_fields')
         .update({
           extended_field: updatedData,
-          table_fields: updatedFields, // 如果数据库有此字段
+          // table_fields: updatedFields, // 该字段在数据库中不存在，暂时移除
           updated_at: new Date().toISOString()
         })
         .eq('id', id)

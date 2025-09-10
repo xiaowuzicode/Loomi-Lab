@@ -119,6 +119,7 @@ export async function POST(request: NextRequest) {
     const {
       appCode,
       type,
+      tableName,
       extendedField,
       amount,
       readme,
@@ -128,10 +129,18 @@ export async function POST(request: NextRequest) {
     } = body
 
     // 基础验证
-    if (!appCode || !type || !readme || !extendedField) {
+    if (!appCode || !type || !tableName || !readme || !extendedField) {
       return NextResponse.json({
         success: false,
         error: '缺少必填字段'
+      }, { status: 400 })
+    }
+    
+    // 验证表名
+    if (!tableName.trim() || tableName.trim().length < 2) {
+      return NextResponse.json({
+        success: false,
+        error: '表名至少需要2个字符'
       }, { status: 400 })
     }
 
@@ -143,13 +152,15 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // 验证扩展字段必须包含标题
-    const titleField = extendedField.find((field: any) => field.key === 'title')
-    if (!titleField || !titleField.value) {
-      return NextResponse.json({
-        success: false,
-        error: '标题字段是必填的'
-      }, { status: 400 })
+    // 确保扩展字段包含标题字段
+    let titleField = extendedField.find((field: any) => field.key === 'title' || field.label === '标题')
+    if (!titleField) {
+      // 如果没有标题字段，自动添加
+      titleField = { key: 'title', label: '标题', value: '标题', required: true }
+      extendedField.unshift(titleField) // 添加到开头
+    } else if (!titleField.value) {
+      // 如果标题字段值为空，设置默认值
+      titleField.value = '标题'
     }
 
     // 验证金额
@@ -166,6 +177,7 @@ export async function POST(request: NextRequest) {
       createdUserId: '00000000-0000-0000-0000-000000000001', // 使用有效的UUID格式代表管理员
       appCode,
       type,
+      tableName: tableName.trim(),
       extendedField,
       amount: amountInCents,
       readme,
@@ -227,13 +239,15 @@ export async function PUT(request: NextRequest) {
     // 只更新提供的字段
     if (appCode !== undefined) updates.appCode = appCode
     if (extendedField !== undefined) {
-      // 验证扩展字段必须包含标题
-      const titleField = extendedField.find((field: any) => field.key === 'title')
-      if (!titleField || !titleField.value) {
-        return NextResponse.json({
-          success: false,
-          error: '标题字段是必填的'
-        }, { status: 400 })
+      // 确保扩展字段包含标题字段
+      let titleField = extendedField.find((field: any) => field.key === 'title' || field.label === '标题')
+      if (!titleField) {
+        // 如果没有标题字段，自动添加
+        titleField = { key: 'title', label: '标题', value: '标题', required: true }
+        extendedField.unshift(titleField) // 添加到开头
+      } else if (!titleField.value) {
+        // 如果标题字段值为空，设置默认值
+        titleField.value = '标题'
       }
       updates.extendedField = extendedField
     }

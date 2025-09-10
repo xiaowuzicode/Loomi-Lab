@@ -28,7 +28,6 @@ import { useState } from 'react'
 
 interface TableToolbarProps {
   onCreateTable: () => void
-  onFieldManager: () => void
   onImportData: () => void
   onExportData: () => void
   onExportExcel: () => void
@@ -40,7 +39,6 @@ interface TableToolbarProps {
 
 export function TableToolbar({
   onCreateTable,
-  onFieldManager,
   onImportData,
   onExportData,
   onExportExcel,
@@ -74,15 +72,6 @@ export function TableToolbar({
           size="sm"
         >
           新建表
-        </Button>
-        
-        <Button
-          leftIcon={<RiSettings3Line />}
-          variant="outline"
-          onClick={onFieldManager}
-          size="sm"
-        >
-          字段管理
         </Button>
         
         <Menu>

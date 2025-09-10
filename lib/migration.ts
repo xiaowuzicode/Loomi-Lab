@@ -37,8 +37,8 @@ export function migrateLegacyToTable(
 ): { tableData: TableRow[], tableFields: string[] } {
   if (!legacyFields || legacyFields.length === 0) {
     return {
-      tableData: [{ id: 1, 标题: '', 正文: '' }],
-      tableFields: ['标题', '正文']
+      tableData: [{ id: 1, 标题: '' }],
+      tableFields: ['标题']
     }
   }
 
@@ -148,8 +148,8 @@ export function batchMigrateData(records: Array<{ id: string, extendedField: any
       case 'empty':
       default:
         migrated = {
-          tableData: [{ id: 1, 标题: '', 正文: '' }],
-          tableFields: ['标题', '正文']
+          tableData: [{ id: 1, 标题: '' }],
+          tableFields: ['标题']
         }
         break
     }
@@ -289,8 +289,8 @@ export class DataMigrationTool {
       }
     } else {
       return {
-        tableData: [{ id: 1, 标题: '', 正文: '' }],
-        tableFields: ['标题', '正文']
+        tableData: [{ id: 1, 标题: '' }],
+        tableFields: ['标题']
       }
     }
   }

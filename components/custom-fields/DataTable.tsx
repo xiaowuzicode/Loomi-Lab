@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import {
   Table,
   Thead,
@@ -21,6 +22,7 @@ import {
   Skeleton,
   Icon,
   Button,
+  Input,
   useColorModeValue,
 } from '@chakra-ui/react'
 import {
@@ -32,6 +34,9 @@ import {
   RiSortAsc,
   RiSortDesc,
   RiFilterLine,
+  RiCheckLine,
+  RiCloseLine,
+  RiCloseCircleLine,
 } from 'react-icons/ri'
 import { TableRow } from '@/types'
 import { EditableCell } from './EditableCell'
@@ -48,8 +53,18 @@ interface DataTableProps {
   onAddRow: () => void
   onFieldSort?: (field: string) => void
   onFieldFilter?: (field: string) => void
-  onFieldRename?: (field: string) => void
   onFieldDelete?: (field: string) => void
+  onFieldRename?: (oldName: string, newName: string) => void
+  editingField?: string | null
+  onEditingFieldChange?: (field: string | null) => void
+  isRenamingField?: boolean
+  onCancelRename?: () => void
+  onAddField?: () => void
+  pendingNewField?: string | null
+  onPendingFieldUpdate?: (fieldName: string) => void
+  onPendingFieldSave?: () => Promise<void>
+  onPendingFieldCancel?: () => void
+  isAddingField?: boolean
   loading?: boolean
   sortField?: string
   sortOrder?: 'asc' | 'desc'
@@ -74,8 +89,18 @@ export function DataTable({
   onAddRow,
   onFieldSort,
   onFieldFilter,
-  onFieldRename,
   onFieldDelete,
+  onFieldRename,
+  editingField,
+  onEditingFieldChange,
+  isRenamingField,
+  onCancelRename,
+  onAddField,
+  pendingNewField,
+  onPendingFieldUpdate,
+  onPendingFieldSave,
+  onPendingFieldCancel,
+  isAddingField = false,
   loading = false,
   sortField,
   sortOrder,
@@ -87,9 +112,30 @@ export function DataTable({
   isDeletingRow = false,
   pendingDeleteRowId,
 }: DataTableProps) {
+  const [tempFieldName, setTempFieldName] = useState<string>('')
+  
+  // 当开始编辑时初始化临时值
+  const handleStartEditing = (fieldName: string) => {
+    setTempFieldName(fieldName)
+    onEditingFieldChange?.(fieldName)
+  }
+  
+  // 当停止编辑时清空临时值
+  const handleStopEditing = () => {
+    setTempFieldName('')
+    onEditingFieldChange?.(null)
+  }
   const bgColor = useColorModeValue('white', 'gray.800')
   const borderColor = useColorModeValue('gray.200', 'gray.600')
   const hoverBgColor = useColorModeValue('gray.50', 'gray.700')
+  
+  // 选中行的颜色配置
+  const selectedBgColor = useColorModeValue('blue.50', 'blue.800')
+  const selectedHoverBgColor = useColorModeValue('blue.100', 'blue.700')
+  
+  // 新行的颜色配置
+  const newRowBgColor = useColorModeValue('green.50', 'green.800')
+  const newRowBorderColor = useColorModeValue('green.300', 'green.500')
   
   const allSelected = data.length > 0 && selectedRows.length === data.length
   const indeterminate = selectedRows.length > 0 && selectedRows.length < data.length
@@ -146,8 +192,8 @@ export function DataTable({
   }
 
   return (
-    <TableContainer>
-      <Table variant="simple" size="md">
+    <TableContainer overflowX="auto">
+      <Table variant="simple" size="md" style={{ minWidth: '800px' }}>
         {/* 表头 */}
         <Thead bg={hoverBgColor}>
           <Tr>
@@ -166,73 +212,204 @@ export function DataTable({
             {fields.map((field) => {
               const isTitle = field === '标题'
               const canSort = onFieldSort && field !== '标题'
-              const canManage = onFieldRename || onFieldDelete
+              const canManage = onFieldFilter
               const isSorted = sortField === field
               
               return (
-                <Th key={field} minW="120px" maxW="300px">
-                  <HStack spacing={2} justify="space-between">
-                    <Text fontWeight="semibold" flex={1} noOfLines={1}>
-                      {field}
-                    </Text>
-                    
-                    <HStack spacing={1}>
-                      {/* 排序按钮 */}
-                      {canSort && (
-                        <IconButton
-                          icon={
-                            isSorted ? (
-                              sortOrder === 'asc' ? <RiSortAsc /> : <RiSortDesc />
-                            ) : (
-                              <RiSortAsc />
-                            )
-                          }
-                          size="xs"
-                          variant="ghost"
-                          opacity={isSorted ? 1 : 0.5}
-                          onClick={() => onFieldSort(field)}
-                          aria-label="排序"
-                        />
-                      )}
-                      
-                      {/* 字段管理菜单 */}
-                      {canManage && !isTitle && (
-                        <Menu>
-                          <MenuButton
-                            as={IconButton}
-                            icon={<RiMoreLine />}
+                <Th 
+                  key={field} 
+                  minW="120px" 
+                  maxW="300px"
+                  {...(isTitle ? {
+                    position: 'sticky',
+                    left: '100px',
+                    bg: hoverBgColor,
+                    zIndex: 1
+                  } : {})}
+                >
+                  <Box
+                    role="group"
+                    _hover={{}}
+                  >
+                    <HStack spacing={2} justify="space-between">
+                      {editingField === field ? (
+                        <HStack spacing={1} flex={1}>
+                          <Input
+                            value={tempFieldName}
+                            onChange={(e) => {
+                              setTempFieldName(e.target.value)
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                const newName = e.currentTarget.value.trim()
+                                if (newName && newName !== field && onFieldRename) {
+                                  onFieldRename(field, newName)
+                                }
+                              } else if (e.key === 'Escape') {
+                                onCancelRename?.()
+                              }
+                            }}
+                            size="sm"
+                            fontWeight="semibold"
+                            border="1px solid"
+                            borderColor="blue.300"
+                            autoFocus
+                            onFocus={(e) => e.target.select()}
+                            flex={1}
+                            minWidth="80px"
+                            maxWidth="150px"
+                          />
+                          <IconButton
+                            icon={<RiCheckLine />}
+                            size="xs"
+                            colorScheme="green"
+                            aria-label="保存重命名"
+                            onClick={() => {
+                              const newName = tempFieldName.trim()
+                              if (newName && newName !== field && onFieldRename) {
+                                onFieldRename(field, newName)
+                              }
+                            }}
+                            isLoading={isRenamingField}
+                            isDisabled={!tempFieldName.trim() || tempFieldName.trim() === field}
+                          />
+                          <IconButton
+                            icon={<RiCloseLine />}
                             size="xs"
                             variant="ghost"
-                            aria-label="字段操作"
+                            aria-label="取消重命名"
+                            onClick={onCancelRename}
+                            isDisabled={isRenamingField}
                           />
-                          <MenuList>
-                            {onFieldFilter && (
+                        </HStack>
+                      ) : (
+                        <Text 
+                          fontWeight="semibold" 
+                          flex={1} 
+                          noOfLines={1}
+                          onDoubleClick={() => {
+                            if (!isTitle && onFieldRename) {
+                              handleStartEditing(field)
+                            }
+                          }}
+                          cursor={!isTitle ? "pointer" : "default"}
+                          _hover={!isTitle ? { bg: "gray.100" } : {}}
+                          px={1}
+                          borderRadius="sm"
+                          title={!isTitle ? "双击重命名" : ""}
+                        >
+                          {field}
+                        </Text>
+                      )}
+                      
+                      <HStack spacing={1}>
+                        {/* 排序按钮 */}
+                        {canSort && (
+                          <IconButton
+                            icon={
+                              isSorted ? (
+                                sortOrder === 'asc' ? <RiSortAsc /> : <RiSortDesc />
+                              ) : (
+                                <RiSortAsc />
+                              )
+                            }
+                            size="xs"
+                            variant="ghost"
+                            opacity={isSorted ? 1 : 0.5}
+                            onClick={() => onFieldSort(field)}
+                            aria-label="排序"
+                          />
+                        )}
+                        
+                        {/* 删除字段按钮（hover显示） */}
+                        {onFieldDelete && !isTitle && (
+                          <IconButton
+                            icon={<RiCloseCircleLine />}
+                            size="xs"
+                            variant="ghost"
+                            colorScheme="red"
+                            opacity={0}
+                            _groupHover={{ opacity: 1 }}
+                            onClick={() => onFieldDelete(field)}
+                            aria-label="删除字段"
+                            title="删除字段"
+                          />
+                        )}
+                        
+                        {/* 筛选菜单 */}
+                        {onFieldFilter && !isTitle && (
+                          <Menu>
+                            <MenuButton
+                              as={IconButton}
+                              icon={<RiMoreLine />}
+                              size="xs"
+                              variant="ghost"
+                              aria-label="字段操作"
+                            />
+                            <MenuList>
                               <MenuItem icon={<RiFilterLine />} onClick={() => onFieldFilter(field)}>
                                 筛选
                               </MenuItem>
-                            )}
-                            {onFieldRename && (
-                              <MenuItem icon={<RiEditLine />} onClick={() => onFieldRename(field)}>
-                                重命名
-                              </MenuItem>
-                            )}
-                            {onFieldDelete && (
-                              <MenuItem
-                                icon={<RiDeleteBinLine />}
-                                onClick={() => onFieldDelete(field)}
-                                color="red.500"
-                              >
-                                删除字段
-                              </MenuItem>
-                            )}
-                          </MenuList>
-                        </Menu>
-                      )}
+                            </MenuList>
+                          </Menu>
+                        )}
+                      </HStack>
                     </HStack>
-                  </HStack>
+                  </Box>
                 </Th>
               )
             })}
+            
+            {/* 添加新字段列 */}
+            {onAddField && (
+              <Th minW="150px" maxW="200px">
+                {pendingNewField !== null ? (
+                  <HStack spacing={2}>
+                    <Input
+                      value={pendingNewField}
+                      onChange={(e) => onPendingFieldUpdate?.(e.target.value)}
+                      size="sm"
+                      placeholder="输入字段名"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          onPendingFieldSave?.()
+                        } else if (e.key === 'Escape') {
+                          onPendingFieldCancel?.()
+                        }
+                      }}
+                      autoFocus
+                    />
+                    <IconButton
+                      icon={<RiCheckLine />}
+                      size="xs"
+                      colorScheme="green"
+                      onClick={onPendingFieldSave}
+                      isLoading={isAddingField}
+                      aria-label="保存字段"
+                    />
+                    <IconButton
+                      icon={<RiCloseLine />}
+                      size="xs"
+                      variant="ghost"
+                      onClick={onPendingFieldCancel}
+                      isDisabled={isAddingField}
+                      aria-label="取消"
+                    />
+                  </HStack>
+                ) : (
+                  <IconButton
+                    icon={<RiAddLine />}
+                    size="sm"
+                    variant="ghost"
+                    onClick={onAddField}
+                    color="gray.500"
+                    _hover={{ color: 'blue.500', bg: 'blue.50' }}
+                    aria-label="添加字段"
+                    title="添加字段"
+                  />
+                )}
+              </Th>
+            )}
             
             <Th w="120px">操作</Th>
           </Tr>
@@ -246,8 +423,8 @@ export function DataTable({
             return (
               <Tr
                 key={row.id}
-                bg={isSelected ? useColorModeValue('blue.50', 'blue.900') : bgColor}
-                _hover={{ bg: isSelected ? useColorModeValue('blue.100', 'blue.800') : hoverBgColor }}
+                bg={isSelected ? selectedBgColor : bgColor}
+                _hover={{ bg: isSelected ? selectedHoverBgColor : hoverBgColor }}
                 role="group"
               >
                 {/* 选择框 */}
@@ -266,16 +443,36 @@ export function DataTable({
                 </Td>
 
                 {/* 动态字段单元格 */}
-                {fields.map((field) => (
-                  <Td key={field} maxW="300px" p={1}>
-                    <EditableCell
-                      value={row[field] || ''}
-                      onSave={(newValue) => handleCellUpdate(row.id, field, newValue)}
-                      isTitle={field === '标题'}
-                      placeholder={`输入${field}...`}
-                    />
+                {fields.map((field) => {
+                  const isTitle = field === '标题'
+                  return (
+                    <Td 
+                      key={field} 
+                      maxW="300px" 
+                      p={1}
+                      {...(isTitle ? {
+                        position: 'sticky',
+                        left: '100px',
+                        bg: 'inherit',
+                        zIndex: 1
+                      } : {})}
+                    >
+                      <EditableCell
+                        value={row[field] || ''}
+                        onSave={(newValue) => handleCellUpdate(row.id, field, newValue)}
+                        isTitle={isTitle}
+                        placeholder={`输入${field}...`}
+                      />
+                    </Td>
+                  )
+                })}
+
+                {/* 新字段列占位 */}
+                {onAddField && (
+                  <Td minW="150px" maxW="200px">
+                    {/* 空单元格，等待字段添加后显示内容 */}
                   </Td>
-                ))}
+                )}
 
                 {/* 操作按钮 */}
                 <Td>
@@ -308,7 +505,7 @@ export function DataTable({
 
           {/* 待编辑的新行 */}
           {pendingRow && (
-            <Tr bg={useColorModeValue('green.50', 'green.900')} borderWidth="2px" borderColor="green.300">
+            <Tr bg={newRowBgColor} borderWidth="2px" borderColor={newRowBorderColor}>
               {/* 选择框 - 禁用状态 */}
               <Td position="sticky" left={0} bg="inherit" zIndex={1}>
                 <Checkbox isDisabled />
@@ -322,17 +519,37 @@ export function DataTable({
               </Td>
 
               {/* 字段编辑区域 */}
-              {fields.map((field) => (
-                <Td key={field} maxW="300px" p={1}>
-                  <EditableCell
-                    value={pendingRow[field] || ''}
-                    onSave={(newValue) => onPendingRowUpdate?.(field, newValue)}
-                    isTitle={field === '标题'}
-                    placeholder={`输入${field}...`}
-                    autoFocus={field === '标题'}
-                  />
+              {fields.map((field) => {
+                const isTitle = field === '标题'
+                return (
+                  <Td 
+                    key={field} 
+                    maxW="300px" 
+                    p={1}
+                    {...(isTitle ? {
+                      position: 'sticky',
+                      left: '100px',
+                      bg: 'inherit',
+                      zIndex: 1
+                    } : {})}
+                  >
+                    <EditableCell
+                      value={pendingRow[field] || ''}
+                      onSave={(newValue) => onPendingRowUpdate?.(field, newValue)}
+                      isTitle={isTitle}
+                      placeholder={`输入${field}...`}
+                      autoFocus={isTitle}
+                    />
+                  </Td>
+                )
+              })}
+
+              {/* 新字段列占位 */}
+              {onAddField && (
+                <Td minW="150px" maxW="200px">
+                  {/* 空单元格 */}
                 </Td>
-              ))}
+              )}
 
               {/* 保存/取消按钮 */}
               <Td>
@@ -365,7 +582,7 @@ export function DataTable({
               <Td colSpan={2} position="sticky" left={0} bg="inherit" zIndex={1}>
                 <Icon as={RiAddLine} color="gray.400" />
               </Td>
-              <Td colSpan={fields.length + 1}>
+              <Td colSpan={fields.length + (onAddField ? 2 : 1)}>
                 <Button
                   variant="ghost"
                   leftIcon={<RiAddLine />}

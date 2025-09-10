@@ -7,6 +7,7 @@ import {
   VStack,
   HStack,
   Button,
+  IconButton,
   Badge,
   useColorModeValue,
   useToast,
@@ -45,18 +46,17 @@ import {
   RiAddLine,
   RiDeleteBinLine,
   RiFileTextLine,
+  RiCloseLine,
 } from 'react-icons/ri'
 import { PageLayout } from '@/components/layout/PageLayout'
 import { Card } from '@/components/ui/Card'
 import { DataTable } from '@/components/custom-fields/DataTable'
 import { TableToolbar } from '@/components/custom-fields/TableToolbar'
-import { FieldManagerModal } from '@/components/custom-fields/FieldManagerModal'
 import { BatchOperationBar } from '@/components/custom-fields/BatchOperationBar'
 import { 
   CustomFieldRecord, 
   CustomFieldForm, 
   TableRow, 
-  FieldOperation,
   CustomFieldStats 
 } from '@/types'
 import { useTableCustomFields } from '@/hooks/useTableCustomFields'
@@ -90,22 +90,20 @@ export default function CustomFieldsTablePage() {
 
   // Modal states
   const { isOpen: isCreateTableOpen, onOpen: onCreateTableOpen, onClose: onCreateTableClose } = useDisclosure()
-  const { isOpen: isFieldManagerOpen, onOpen: onFieldManagerOpen, onClose: onFieldManagerClose } = useDisclosure()
   const { isOpen: isDeleteTableOpen, onOpen: onDeleteTableOpen, onClose: onDeleteTableClose } = useDisclosure()
   
   // Form states
-  const [createTableForm, setCreateTableForm] = useState<CustomFieldForm & { type: string }>({
+  const [createTableForm, setCreateTableForm] = useState<CustomFieldForm & { type: string; tableName: string }>({
     appCode: 'loomi',
     type: '洞察',
+    tableName: '', // 表名字段，必填
     amount: 0,
     readme: '',
     exampleData: '',
     visibility: true,
     isPublic: false,
-    extendedField: [
-      { id: 1, 标题: '', 正文: '' }
-    ],
-    tableFields: ['标题', '正文']
+    extendedField: [], // 由后端自动创建标题字段
+    tableFields: [] // 由后端自动生成
   })
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [pendingDeleteTable, setPendingDeleteTable] = useState<CustomFieldRecord | null>(null)
@@ -114,9 +112,24 @@ export default function CustomFieldsTablePage() {
   const [pendingRow, setPendingRow] = useState<TableRow | null>(null)
   const [isAddingRow, setIsAddingRow] = useState(false)
   
+  // 新字段管理状态
+  const [pendingNewField, setPendingNewField] = useState<string | null>(null)
+  const [isAddingField, setIsAddingField] = useState(false)
+  
   // 删除行确认状态
   const [pendingDeleteRow, setPendingDeleteRow] = useState<{ id: number, title: string } | null>(null)
   const [isDeletingRow, setIsDeletingRow] = useState(false)
+  
+  // 删除字段确认状态
+  const [pendingDeleteField, setPendingDeleteField] = useState<string | null>(null)
+  const [isDeletingField, setIsDeletingField] = useState(false)
+  
+  // 重命名字段状态
+  const [editingField, setEditingField] = useState<string | null>(null)
+  const [isRenamingField, setIsRenamingField] = useState(false)
+  
+  // 删除表格确认状态
+  const [isDeletingTable, setIsDeletingTable] = useState(false)
 
   const cancelRef = useRef<HTMLButtonElement>(null)
   const toast = useToast()
@@ -127,6 +140,10 @@ export default function CustomFieldsTablePage() {
   const textColor = useColorModeValue('gray.800', 'white')
   const mutedTextColor = useColorModeValue('gray.600', 'gray.400')
   const hoverBgColor = useColorModeValue('gray.50', 'gray.700')
+  
+  // 选中状态的颜色配置（与DataTable保持一致）
+  const selectedBgColor = useColorModeValue('blue.50', 'blue.800')
+  const selectedHoverBgColor = useColorModeValue('blue.100', 'blue.700')
 
   // 使用新的 hook
   const {
@@ -174,15 +191,14 @@ export default function CustomFieldsTablePage() {
     setCreateTableForm({
       appCode: 'loomi',
       type: selectedType,
+      tableName: '', // 初始化表名字段
       amount: 0,
       readme: '',
       exampleData: '',
       visibility: true,
       isPublic: false,
-      extendedField: [
-        { id: 1, 标题: '', 正文: '' }
-      ],
-      tableFields: ['标题', '正文']
+      extendedField: [], // 由后端自动创建标题字段
+      tableFields: [] // 由后端自动生成
     })
     setFormErrors({})
     onCreateTableOpen()
@@ -307,8 +323,7 @@ export default function CustomFieldsTablePage() {
     setIsAddingRow(true)
     try {
       // 调用API保存新行
-      const rowData = { ...pendingRow }
-      delete rowData.id // 删除临时ID，让服务器生成
+      const { id, ...rowData } = pendingRow // 删除临时ID，让服务器生成
       
       const updatedTable = await updateTableRow(currentTable.id, 'add', undefined, rowData)
       
@@ -337,9 +352,129 @@ export default function CustomFieldsTablePage() {
     setPendingRow(null)
   }
 
-  const handleFieldOperation = async (operation: FieldOperation) => {
+  // 字段管理函数
+  const handleAddField = () => {
     if (!currentTable) return
-    await updateTableFields(currentTable.id, operation)
+    
+    // 如果已经在编辑状态，先取消
+    if (pendingNewField !== null) {
+      setPendingNewField(null)
+      return
+    }
+    
+    // 开始编辑新字段
+    setPendingNewField('')
+  }
+
+  const handlePendingFieldUpdate = (fieldName: string) => {
+    setPendingNewField(fieldName)
+  }
+
+  const handlePendingFieldSave = async () => {
+    if (!currentTable || !pendingNewField?.trim()) {
+      toast({
+        title: '字段名不能为空',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return
+    }
+
+    if (currentTable.tableFields.includes(pendingNewField.trim())) {
+      toast({
+        title: '字段名已存在',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return
+    }
+
+    setIsAddingField(true)
+    try {
+      const updatedTable = await updateTableFields(currentTable.id, {
+        action: 'add',
+        fieldName: pendingNewField.trim(),
+      })
+      
+      if (updatedTable) {
+        setPendingNewField(null)
+        toast({
+          title: '字段添加成功',
+          status: 'success',
+          duration: 2000,
+          isClosable: true,
+        })
+      }
+    } catch (error) {
+      console.error('添加字段失败:', error)
+      toast({
+        title: '添加字段失败',
+        description: error instanceof Error ? error.message : '未知错误',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    } finally {
+      setIsAddingField(false)
+    }
+  }
+
+  const handlePendingFieldCancel = () => {
+    setPendingNewField(null)
+    setIsAddingField(false)
+  }
+
+  // 删除字段相关函数
+  const handleFieldDelete = (fieldName: string) => {
+    if (fieldName === '标题') {
+      toast({
+        title: '标题字段不可删除',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return
+    }
+    setPendingDeleteField(fieldName)
+  }
+
+  const confirmDeleteField = async () => {
+    if (!currentTable || !pendingDeleteField) return
+    
+    setIsDeletingField(true)
+    try {
+      const updatedTable = await updateTableFields(currentTable.id, {
+        action: 'remove',
+        fieldName: pendingDeleteField,
+      })
+      
+      if (updatedTable) {
+        setPendingDeleteField(null)
+        toast({
+          title: '字段删除成功',
+          status: 'success',
+          duration: 2000,
+          isClosable: true,
+        })
+      }
+    } catch (error) {
+      console.error('删除字段失败:', error)
+      toast({
+        title: '删除字段失败',
+        description: error instanceof Error ? error.message : '未知错误',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+    } finally {
+      setIsDeletingField(false)
+    }
+  }
+
+  const cancelDeleteField = () => {
+    setPendingDeleteField(null)
   }
 
   const handleFieldSort = (field: string) => {
@@ -349,6 +484,122 @@ export default function CustomFieldsTablePage() {
       setSortField(field)
       setSortOrder('asc')
     }
+  }
+
+  // 重命名字段函数
+  const handleFieldRename = async (oldName: string, newName: string) => {
+    if (!currentTable || oldName === newName || isRenamingField) return
+    
+    if (oldName === '标题') {
+      toast({
+        title: '标题字段不可重命名',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      setEditingField(null)
+      return
+    }
+    
+    if (currentTable.tableFields.includes(newName)) {
+      toast({
+        title: '字段名已存在',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      setEditingField(null)
+      return
+    }
+    
+    setIsRenamingField(true)
+    
+    try {
+      const updatedTable = await updateTableFields(currentTable.id, {
+        action: 'rename',
+        fieldName: oldName,
+        newFieldName: newName,
+      })
+      
+      if (updatedTable) {
+        toast({
+          title: '字段重命名成功',
+          status: 'success',
+          duration: 2000,
+          isClosable: true,
+        })
+        setEditingField(null)
+      }
+    } catch (error) {
+      console.error('重命名字段失败:', error)
+      toast({
+        title: '重命名字段失败',
+        description: error instanceof Error ? error.message : '未知错误',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+    } finally {
+      setIsRenamingField(false)
+    }
+  }
+  
+  // 取消重命名
+  const handleCancelRename = () => {
+    setEditingField(null)
+  }
+  
+  // 删除表格函数
+  const handleTableDelete = (table: CustomFieldRecord) => {
+    setPendingDeleteTable(table)
+    onDeleteTableOpen()
+  }
+  
+  const confirmTableDelete = async () => {
+    if (!pendingDeleteTable) return
+    
+    setIsDeletingTable(true)
+    try {
+      const success = await hookDeleteTable(pendingDeleteTable.id)
+      
+      if (success) {
+        // 如果删除的是当前选中的表，清空选中状态
+        if (currentTable?.id === pendingDeleteTable.id) {
+          setCurrentTable(null)
+        }
+        
+        setPendingDeleteTable(null)
+        onDeleteTableClose()
+        
+        toast({
+          title: '删除成功',
+          description: `表格“${pendingDeleteTable.tableName}”已删除`,
+          status: 'success',
+          duration: 2000,
+          isClosable: true,
+        })
+        
+        // 刷新表格列表和统计数据
+        await fetchTables()
+        await fetchStats()
+      }
+    } catch (error) {
+      console.error('删除表格失败:', error)
+      toast({
+        title: '删除表格失败',
+        description: error instanceof Error ? error.message : '未知错误',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+    } finally {
+      setIsDeletingTable(false)
+    }
+  }
+  
+  const cancelTableDelete = () => {
+    setPendingDeleteTable(null)
+    onDeleteTableClose()
   }
 
   // 批量操作函数
@@ -394,7 +645,7 @@ export default function CustomFieldsTablePage() {
     )
     
     const exportData = {
-      tableName: currentTable.extendedField.find(r => r.标题)?.标题 || '自定义数据',
+      tableName: currentTable.tableName,
       tableFields: currentTable.tableFields,
       data: selectedData,
       exportTime: new Date().toISOString(),
@@ -423,6 +674,12 @@ export default function CustomFieldsTablePage() {
   // 表单验证
   const validateCreateTableForm = (): boolean => {
     const errors: Record<string, string> = {}
+
+    if (!createTableForm.tableName.trim()) {
+      errors.tableName = '表名是必填的'
+    } else if (createTableForm.tableName.trim().length < 2) {
+      errors.tableName = '表名至少需要2个字符'
+    }
 
     if (!createTableForm.readme.trim() || createTableForm.readme.trim().length < 10) {
       errors.readme = '说明文档至少需要10个字符'
@@ -512,9 +769,11 @@ export default function CustomFieldsTablePage() {
 
           {/* 表格列表 */}
           <Box mt={6}>
-            <Text fontWeight="semibold" mb={3} color={textColor}>
-              {selectedType}类型表格
-            </Text>
+            <HStack justify="space-between" align="center" mb={3}>
+              <Text fontWeight="semibold" color={textColor}>
+                {selectedType}类型表格
+              </Text>
+            </HStack>
             <VStack spacing={2} align="stretch">
               {loading ? (
                 Array.from({ length: 3 }).map((_, index) => (
@@ -528,21 +787,44 @@ export default function CustomFieldsTablePage() {
                 tables.map((table) => (
                   <Box
                     key={table.id}
+                    position="relative"
+                    role="group"
                     p={3}
                     border="1px"
                     borderColor={borderColor}
                     borderRadius="md"
                     cursor="pointer"
-                    bg={currentTable?.id === table.id ? 'blue.50' : 'transparent'}
-                    _hover={{ bg: 'blue.50' }}
+                    bg={currentTable?.id === table.id ? selectedBgColor : 'transparent'}
+                    _hover={{ bg: currentTable?.id === table.id ? selectedHoverBgColor : selectedBgColor }}
                     onClick={() => handleTableSelect(table)}
                   >
-                    <Text fontSize="sm" fontWeight="medium" noOfLines={1}>
-                      {table.extendedField[0]?.标题 || '未命名表格'}
-                    </Text>
-                    <Text fontSize="xs" color={mutedTextColor}>
-                      {table.extendedField.length} 行数据
-                    </Text>
+                    <HStack justify="space-between" align="center">
+                      <Box flex={1} minW={0}>
+                        <Text fontSize="sm" fontWeight="medium" noOfLines={1}>
+                          {table.tableName}
+                        </Text>
+                        <Text fontSize="xs" color={mutedTextColor}>
+                          {table.extendedField.length} 行数据
+                        </Text>
+                      </Box>
+                      
+                      {/* 删除按钮 - 悬停时显示 */}
+                      <IconButton
+                        icon={<RiCloseLine />}
+                        size="xs"
+                        variant="ghost"
+                        colorScheme="red"
+                        aria-label="删除表格"
+                        opacity={0}
+                        _groupHover={{ opacity: 1 }}
+                        transition="opacity 0.2s"
+                        onClick={(e) => {
+                          e.stopPropagation() // 防止触发表格选择
+                          handleTableDelete(table)
+                        }}
+                        zIndex={1}
+                      />
+                    </HStack>
                   </Box>
                 ))
               )}
@@ -557,7 +839,6 @@ export default function CustomFieldsTablePage() {
               {/* 表格工具栏 */}
               <TableToolbar
                 onCreateTable={handleCreateTable}
-                onFieldManager={onFieldManagerOpen}
                 onImportData={() => console.log('导入数据')}
                 onExportData={() => console.log('导出数据')}
                 onExportExcel={() => console.log('导出Excel')}
@@ -582,6 +863,18 @@ export default function CustomFieldsTablePage() {
                   onRowDuplicate={handleRowDuplicate}
                   onAddRow={handleAddRow}
                   onFieldSort={handleFieldSort}
+                  onFieldDelete={handleFieldDelete}
+                  onFieldRename={handleFieldRename}
+                  editingField={editingField}
+                  onEditingFieldChange={setEditingField}
+                  isRenamingField={isRenamingField}
+                  onCancelRename={handleCancelRename}
+                  onAddField={handleAddField}
+                  pendingNewField={pendingNewField}
+                  onPendingFieldUpdate={handlePendingFieldUpdate}
+                  onPendingFieldSave={handlePendingFieldSave}
+                  onPendingFieldCancel={handlePendingFieldCancel}
+                  isAddingField={isAddingField}
                   loading={tableLoading}
                   sortField={sortField}
                   sortOrder={sortOrder}
@@ -625,16 +918,6 @@ export default function CustomFieldsTablePage() {
         </Box>
       </Flex>
 
-      {/* 字段管理模态框 */}
-      {currentTable && (
-        <FieldManagerModal
-          isOpen={isFieldManagerOpen}
-          onClose={onFieldManagerClose}
-          fields={currentTable.tableFields}
-          onFieldOperation={handleFieldOperation}
-        />
-      )}
-
       {/* 创建表格模态框 */}
       <Modal isOpen={isCreateTableOpen} onClose={onCreateTableClose} size="xl">
         <ModalOverlay />
@@ -645,6 +928,16 @@ export default function CustomFieldsTablePage() {
           <ModalCloseButton />
           <ModalBody>
             <VStack spacing={4} align="stretch">
+              <FormControl isInvalid={!!formErrors.tableName} isRequired>
+                <FormLabel>表名</FormLabel>
+                <Input
+                  value={createTableForm.tableName}
+                  onChange={(e) => setCreateTableForm(prev => ({ ...prev, tableName: e.target.value }))}
+                  placeholder="请输入表格名称"
+                />
+                <FormErrorMessage>{formErrors.tableName}</FormErrorMessage>
+              </FormControl>
+              
               <FormControl isInvalid={!!formErrors.readme} isRequired>
                 <FormLabel>📖 表格说明</FormLabel>
                 <Textarea
@@ -733,7 +1026,7 @@ export default function CustomFieldsTablePage() {
             </AlertDialogHeader>
 
             <AlertDialogBody>
-              确定要删除行"{pendingDeleteRow?.title}"吗？
+              确定要删除行“{pendingDeleteRow?.title}”吗？
               <br />
               <Text fontSize="sm" color="gray.500" mt={2}>
                 此操作无法撤销
@@ -752,6 +1045,82 @@ export default function CustomFieldsTablePage() {
                 loadingText="删除中..."
               >
                 删除
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
+
+      {/* 删除字段确认对话框 */}
+      <AlertDialog
+        isOpen={!!pendingDeleteField}
+        leastDestructiveRef={cancelRef}
+        onClose={cancelDeleteField}
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent>
+            <AlertDialogHeader fontSize="lg" fontWeight="bold">
+              确认删除字段
+            </AlertDialogHeader>
+
+            <AlertDialogBody>
+              确定要删除字段“{pendingDeleteField}”吗？
+              <br />
+              <Text fontSize="sm" color="gray.500" mt={2}>
+                删除后，该字段下的所有数据都将丢失，此操作无法撤销
+              </Text>
+            </AlertDialogBody>
+
+            <AlertDialogFooter>
+              <Button ref={cancelRef} onClick={cancelDeleteField} isDisabled={isDeletingField}>
+                取消
+              </Button>
+              <Button 
+                colorScheme="red" 
+                onClick={confirmDeleteField} 
+                ml={3}
+                isLoading={isDeletingField}
+                loadingText="删除中..."
+              >
+                删除字段
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
+      
+      {/* 删除表格确认对话框 */}
+      <AlertDialog
+        isOpen={!!pendingDeleteTable}
+        leastDestructiveRef={cancelRef}
+        onClose={cancelTableDelete}
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent>
+            <AlertDialogHeader fontSize="lg" fontWeight="bold">
+              确认删除表格
+            </AlertDialogHeader>
+
+            <AlertDialogBody>
+              确定要删除表格“{pendingDeleteTable?.tableName}”吗？
+              <br />
+              <Text fontSize="sm" color="gray.500" mt={2}>
+                表格中的所有数据都将丢失，此操作无法撤销
+              </Text>
+            </AlertDialogBody>
+
+            <AlertDialogFooter>
+              <Button ref={cancelRef} onClick={cancelTableDelete} isDisabled={isDeletingTable}>
+                取消
+              </Button>
+              <Button 
+                colorScheme="red" 
+                onClick={confirmTableDelete} 
+                ml={3}
+                isLoading={isDeletingTable}
+                loadingText="删除中..."
+              >
+                删除表格
               </Button>
             </AlertDialogFooter>
           </AlertDialogContent>
