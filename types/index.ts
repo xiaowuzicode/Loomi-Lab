@@ -256,15 +256,35 @@ export interface SystemConfig {
   updatedAt: Date
 }
 
-// 自定义字段管理相关类型
-export interface CustomField {
+// 自定义字段管理相关类型 - 表格化改造后
+
+// 表格行数据类型
+export interface TableRow {
+  id: number // 行ID，自增
+  [field: string]: any // 动态字段，如：标题、正文、分类等
+}
+
+// 旧版本字段定义（向后兼容）
+export interface LegacyCustomField {
   key: string
   label: string
-  value: string // 目前统一为字符串类型
-  type?: 'text' // 目前只支持文本类型
+  value: string
+  type?: 'text'
   required?: boolean
 }
 
+// 表格字段定义
+export interface TableField {
+  name: string // 字段名称
+  label: string // 显示标签
+  type: 'text' | 'textarea' | 'number' // 字段类型
+  required: boolean // 是否必填
+  sortable: boolean // 是否可排序
+  deletable: boolean // 是否可删除
+  width?: number // 列宽
+}
+
+// 更新后的自定义字段记录
 export interface CustomFieldRecord {
   id: string
   userId: string
@@ -272,7 +292,8 @@ export interface CustomFieldRecord {
   createdUserName: string // 创建者显示名称
   appCode: string
   type: '洞察' | '钩子' | '情绪'
-  extendedField: CustomField[]
+  extendedField: TableRow[] // 改为表格行数据数组
+  tableFields: string[] // 表格字段名列表（用于表头生成）
   amount: number // 前端显示的实际金额 (元)
   postIds: string[]
   visibility: boolean
@@ -291,9 +312,29 @@ export interface CustomFieldForm {
   exampleData?: string
   visibility: boolean
   isPublic: boolean
-  extendedField: CustomField[]
+  extendedField: TableRow[]
+  tableFields: string[]
 }
 
+// 表格操作相关类型
+export interface TableRowUpdate {
+  rowId: number
+  updates: Record<string, any>
+}
+
+export interface FieldOperation {
+  action: 'add' | 'remove' | 'rename'
+  fieldName: string
+  newFieldName?: string
+}
+
+export interface BatchOperation {
+  action: 'edit' | 'delete' | 'export'
+  rowIds: number[]
+  updates?: Record<string, any>
+}
+
+// 向后兼容的输入类型
 export interface CustomFieldInput {
   key: string
   label: string
