@@ -198,8 +198,7 @@ export function useTableCustomFields() {
       const transformedData = {
         ...formData,
         extendedField: [
-          // 自动添加标题字段，不需要用户手动输入
-          { key: 'title', label: '标题', value: '标题', required: true }
+          { key: 'title', label: '标题', value: '', required: true }
         ]
       }
 

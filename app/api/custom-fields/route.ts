@@ -155,12 +155,9 @@ export async function POST(request: NextRequest) {
     // 确保扩展字段包含标题字段
     let titleField = extendedField.find((field: any) => field.key === 'title' || field.label === '标题')
     if (!titleField) {
-      // 如果没有标题字段，自动添加
-      titleField = { key: 'title', label: '标题', value: '标题', required: true }
+      // 如果没有标题字段，自动添加（但值为空）
+      titleField = { key: 'title', label: '标题', value: '', required: true }
       extendedField.unshift(titleField) // 添加到开头
-    } else if (!titleField.value) {
-      // 如果标题字段值为空，设置默认值
-      titleField.value = '标题'
     }
 
     // 验证金额
@@ -242,12 +239,9 @@ export async function PUT(request: NextRequest) {
       // 确保扩展字段包含标题字段
       let titleField = extendedField.find((field: any) => field.key === 'title' || field.label === '标题')
       if (!titleField) {
-        // 如果没有标题字段，自动添加
-        titleField = { key: 'title', label: '标题', value: '标题', required: true }
+        // 如果没有标题字段，自动添加（但值为空）
+        titleField = { key: 'title', label: '标题', value: '', required: true }
         extendedField.unshift(titleField) // 添加到开头
-      } else if (!titleField.value) {
-        // 如果标题字段值为空，设置默认值
-        titleField.value = '标题'
       }
       updates.extendedField = extendedField
     }

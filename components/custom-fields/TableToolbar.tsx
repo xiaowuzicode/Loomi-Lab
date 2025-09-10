@@ -23,29 +23,37 @@ import {
   RiFileExcelLine,
   RiSearchLine,
   RiRefreshLine,
+  RiCheckLine,
 } from 'react-icons/ri'
 import { useState } from 'react'
 
 interface TableToolbarProps {
   onCreateTable: () => void
   onImportData: () => void
-  onExportData: () => void
   onExportExcel: () => void
   onRefresh: () => void
   onSearch: (searchTerm: string) => void
   searchPlaceholder?: string
   loading?: boolean
+  // 统一保存相关
+  hasUnsavedChanges?: boolean
+  unsavedChangesCount?: number
+  onSaveAllChanges?: () => void
+  isSavingChanges?: boolean
 }
 
 export function TableToolbar({
   onCreateTable,
   onImportData,
-  onExportData,
   onExportExcel,
   onRefresh,
   onSearch,
   searchPlaceholder = "搜索表格数据...",
   loading = false,
+  hasUnsavedChanges = false,
+  unsavedChangesCount = 0,
+  onSaveAllChanges,
+  isSavingChanges = false,
 }: TableToolbarProps) {
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -74,6 +82,20 @@ export function TableToolbar({
           新建表
         </Button>
         
+        {/* 统一保存按钮 */}
+        {hasUnsavedChanges && (
+          <Button
+            leftIcon={<RiCheckLine />}
+            colorScheme="green"
+            onClick={onSaveAllChanges}
+            size="sm"
+            isLoading={isSavingChanges}
+            loadingText="保存中"
+          >
+            保存更改 ({unsavedChangesCount})
+          </Button>
+        )}
+        
         <Menu>
           <MenuButton
             as={Button}
@@ -86,9 +108,6 @@ export function TableToolbar({
           <MenuList>
             <MenuItem icon={<RiUploadLine />} onClick={onImportData}>
               导入数据
-            </MenuItem>
-            <MenuItem icon={<RiDownloadLine />} onClick={onExportData}>
-              导出数据
             </MenuItem>
             <MenuItem icon={<RiFileExcelLine />} onClick={onExportExcel}>
               导出为Excel

@@ -942,7 +942,7 @@ export class CustomFieldStorage {
       if (error) throw error
 
       // 去重并排序
-      const uniqueAppCodes = [...new Set((data || []).map(record => record.app_code))]
+      const uniqueAppCodes = Array.from(new Set((data || []).map(record => record.app_code)))
         .filter(code => code && code.trim() !== '')
         .sort()
 
@@ -1032,7 +1032,7 @@ export class CustomFieldStorage {
       
       // 旧格式：[{key, label, value, required}] 转换为新格式
       if (firstItem && 'key' in firstItem && 'label' in firstItem && 'value' in firstItem) {
-        const convertedData = { id: 1 }
+        const convertedData: { id: number; [key: string]: any } = { id: 1 }
         extendedField.forEach((field: any) => {
           convertedData[field.label] = field.value || ''
           if (!tableFields.includes(field.label)) {
@@ -1126,8 +1126,8 @@ export class CustomFieldStorage {
             if (fieldIndex !== -1 && !updatedFields.includes(operation.newFieldName)) {
               updatedFields[fieldIndex] = operation.newFieldName
               updatedData = updatedData.map(row => {
-                const { [operation.fieldName]: value, ...rest } = row
-                return { ...rest, [operation.newFieldName]: value }
+                const { [operation.fieldName]: value, ...rest } = row as any
+                return { ...rest, [operation.newFieldName!]: value }
               })
             }
           }
@@ -1178,7 +1178,7 @@ export class CustomFieldStorage {
       switch (operation.action) {
         case 'add':
           const maxId = Math.max(0, ...updatedData.map(row => row.id || 0))
-          const newRow = { id: maxId + 1 }
+          const newRow: { id: number; [key: string]: any } = { id: maxId + 1 }
           // 为每个字段初始化空值
           currentRecord.tableFields.forEach(field => {
             newRow[field] = operation.rowData?.[field] || ''

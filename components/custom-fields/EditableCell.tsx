@@ -16,29 +16,31 @@ import { RiCheckLine, RiCloseLine, RiEditLine } from 'react-icons/ri'
 
 interface EditableCellProps {
   value: string
-  onSave: (newValue: string) => Promise<void> | void
+  originalValue: string
+  onValueChange: (newValue: string) => void
   isTitle?: boolean
   placeholder?: string
   disabled?: boolean
   minRows?: number
   autoFocus?: boolean
+  isPending?: boolean  // 是否有未保存的更改
 }
 
 export function EditableCell({
   value = '',
-  onSave,
+  originalValue,
+  onValueChange,
   isTitle = false,
   placeholder = '点击编辑...',
   disabled = false,
   minRows = 2,
-  autoFocus = false
+  autoFocus = false,
+  isPending = false
 }: EditableCellProps) {
   const [isEditing, setIsEditing] = useState(autoFocus)
   const [editValue, setEditValue] = useState(value)
-  const [isLoading, setIsLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const toast = useToast()
   
   // 颜色主题
   const inputTextColor = useColorModeValue('gray.800', 'white')
@@ -56,35 +58,12 @@ export function EditableCell({
     setEditValue(value)
   }
 
-  const handleSave = async () => {
-    if (editValue.trim() === value) {
-      setIsEditing(false)
-      return
+  const handleFinishEdit = () => {
+    const newValue = editValue.trim()
+    if (newValue !== originalValue) {
+      onValueChange(newValue)
     }
-
-    setIsLoading(true)
-    try {
-      await onSave(editValue.trim())
-      setIsEditing(false)
-      toast({
-        title: '保存成功',
-        status: 'success',
-        duration: 2000,
-        isClosable: true,
-      })
-    } catch (error) {
-      console.error('保存失败:', error)
-      toast({
-        title: '保存失败',
-        description: error instanceof Error ? error.message : '未知错误',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      })
-      setEditValue(value) // 恢复原值
-    } finally {
-      setIsLoading(false)
-    }
+    setIsEditing(false)
   }
 
   const handleCancel = () => {
@@ -96,7 +75,7 @@ export function EditableCell({
     if (e.key === 'Enter') {
       if (isTitle || e.ctrlKey || e.metaKey) {
         e.preventDefault()
-        handleSave()
+        handleFinishEdit()
       }
     } else if (e.key === 'Escape') {
       e.preventDefault()
@@ -122,54 +101,39 @@ export function EditableCell({
 
   if (isEditing) {
     return (
-      <HStack spacing={2} w="full">
+      <Box w="full">
         {isTitle ? (
           <Input
             ref={inputRef}
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
-            onBlur={handleSave}
+            onBlur={handleFinishEdit}
             onKeyDown={handleKeyDown}
             size="sm"
-            disabled={isLoading}
             placeholder={placeholder}
             color={inputTextColor}
             bg={inputBgColor}
+            border="1px solid"
+            borderColor="blue.300"
           />
         ) : (
           <Textarea
             ref={textareaRef}
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
+            onBlur={handleFinishEdit}
             onKeyDown={handleKeyDown}
             size="sm"
             rows={minRows}
             resize="vertical"
-            disabled={isLoading}
             placeholder={placeholder}
             color={inputTextColor}
             bg={inputBgColor}
+            border="1px solid"
+            borderColor="blue.300"
           />
         )}
-        <HStack spacing={1} flexShrink={0}>
-          <IconButton
-            icon={<RiCheckLine />}
-            size="xs"
-            colorScheme="green"
-            onClick={handleSave}
-            isLoading={isLoading}
-            aria-label="保存"
-          />
-          <IconButton
-            icon={<RiCloseLine />}
-            size="xs"
-            variant="ghost"
-            onClick={handleCancel}
-            disabled={isLoading}
-            aria-label="取消"
-          />
-        </HStack>
-      </HStack>
+      </Box>
     )
   }
 
@@ -198,7 +162,17 @@ export function EditableCell({
           noOfLines={isTitle ? 1 : 3}
           wordBreak="break-word"
           w="full"
-          color={textColor}
+          color={isPending ? "orange.500" : textColor}
+          fontStyle={isPending ? "italic" : "normal"}
+          position="relative"
+          _after={isPending ? {
+            content: '"*"',
+            color: "orange.500",
+            fontSize: "xs",
+            position: "absolute",
+            top: "-2px",
+            right: "-8px"
+          } : {}}
         >
           {value}
         </Text>

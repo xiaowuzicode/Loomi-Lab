@@ -36,6 +36,7 @@ import {
   AlertDialogBody,
   AlertDialogFooter,
   Skeleton,
+  Icon,
 } from '@chakra-ui/react'
 import { motion } from 'framer-motion'
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -47,6 +48,7 @@ import {
   RiDeleteBinLine,
   RiFileTextLine,
   RiCloseLine,
+  RiInformationLine,
 } from 'react-icons/ri'
 import { PageLayout } from '@/components/layout/PageLayout'
 import { Card } from '@/components/ui/Card'
@@ -61,6 +63,7 @@ import {
 } from '@/types'
 import { useTableCustomFields } from '@/hooks/useTableCustomFields'
 import { format } from 'date-fns'
+import { exportToExcel } from '@/lib/excel-utils'
 
 const MotionBox = motion(Box)
 
@@ -109,7 +112,6 @@ export default function CustomFieldsTablePage() {
   const [pendingDeleteTable, setPendingDeleteTable] = useState<CustomFieldRecord | null>(null)
   
   // 新行管理状态
-  const [pendingRow, setPendingRow] = useState<TableRow | null>(null)
   const [isAddingRow, setIsAddingRow] = useState(false)
   
   // 新字段管理状态
@@ -126,10 +128,21 @@ export default function CustomFieldsTablePage() {
   
   // 重命名字段状态
   const [editingField, setEditingField] = useState<string | null>(null)
-  const [isRenamingField, setIsRenamingField] = useState(false)
   
   // 删除表格确认状态
   const [isDeletingTable, setIsDeletingTable] = useState(false)
+  
+  // 未保存的更改状态管理
+  const [pendingChanges, setPendingChanges] = useState<{
+    fieldRenames: { oldName: string; newName: string }[]
+    cellUpdates: { rowId: number; field: string; value: string; originalValue: string }[]
+    newRows: { tempId: string; data: Record<string, string> }[]
+  }>({
+    fieldRenames: [],
+    cellUpdates: [],
+    newRows: []
+  })
+  const [isSavingChanges, setIsSavingChanges] = useState(false)
 
   const cancelRef = useRef<HTMLButtonElement>(null)
   const toast = useToast()
@@ -286,71 +299,32 @@ export default function CustomFieldsTablePage() {
   }
 
   const handleAddRow = () => {
-    if (!currentTable || pendingRow) return
+    if (!currentTable) return
     
-    // 创建新的待编辑行，使用当前最大ID + 1
-    const maxId = Math.max(...currentTable.extendedField.map(row => row.id), 0)
-    const newRow: TableRow = { id: maxId + 1 }
+    // 生成临时ID
+    const tempId = `temp_${Date.now()}`
     
-    // 为每个字段初始化空值
+    // 创建新行数据
+    const newRowData: Record<string, string> = {}
     currentTable.tableFields.forEach(field => {
-      newRow[field] = ''
+      newRowData[field] = ''
     })
     
-    setPendingRow(newRow)
+    // 添加到未保存更改
+    addNewRow(tempId, newRowData)
   }
 
-  const handlePendingRowUpdate = (field: string, value: string) => {
-    if (!pendingRow) return
-    setPendingRow(prev => prev ? { ...prev, [field]: value } : null)
+  const handleNewRowUpdate = (tempId: string, field: string, value: string) => {
+    setPendingChanges(prev => ({
+      ...prev,
+      newRows: prev.newRows.map(row => 
+        row.tempId === tempId 
+          ? { ...row, data: { ...row.data, [field]: value } }
+          : row
+      )
+    }))
   }
 
-  const handlePendingRowSave = async () => {
-    if (!currentTable || !pendingRow) return
-    
-    // 验证标题字段必填
-    if (!pendingRow['标题']?.trim()) {
-      toast({
-        title: '验证失败',
-        description: '标题字段不能为空',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      })
-      return
-    }
-    
-    setIsAddingRow(true)
-    try {
-      // 调用API保存新行
-      const { id, ...rowData } = pendingRow // 删除临时ID，让服务器生成
-      
-      const updatedTable = await updateTableRow(currentTable.id, 'add', undefined, rowData)
-      
-      if (updatedTable) {
-        // 清理状态
-        setPendingRow(null)
-        
-        toast({
-          title: '添加成功',
-          description: '新行已成功添加到表格',
-          status: 'success',
-          duration: 2000,
-          isClosable: true,
-        })
-      } else {
-        throw new Error('保存失败')
-      }
-    } catch (error) {
-      console.error('添加行失败:', error)
-    } finally {
-      setIsAddingRow(false)
-    }
-  }
-
-  const handlePendingRowCancel = () => {
-    setPendingRow(null)
-  }
 
   // 字段管理函数
   const handleAddField = () => {
@@ -486,9 +460,9 @@ export default function CustomFieldsTablePage() {
     }
   }
 
-  // 重命名字段函数
-  const handleFieldRename = async (oldName: string, newName: string) => {
-    if (!currentTable || oldName === newName || isRenamingField) return
+  // 重命名字段函数（现在只更新显示，不立即保存）
+  const handleFieldRename = (oldName: string, newName: string) => {
+    if (!currentTable || oldName === newName) return
     
     if (oldName === '标题') {
       toast({
@@ -497,51 +471,27 @@ export default function CustomFieldsTablePage() {
         duration: 3000,
         isClosable: true,
       })
-      setEditingField(null)
       return
     }
     
-    if (currentTable.tableFields.includes(newName)) {
+    // 检查是否与其他字段名冲突（包括原始字段和pending重命名）
+    const allFieldNames = [
+      ...currentTable.tableFields,
+      ...pendingChanges.fieldRenames.map(r => r.newName)
+    ].filter(name => name !== oldName) // 排除当前正在重命名的字段
+    
+    if (allFieldNames.includes(newName)) {
       toast({
         title: '字段名已存在',
         status: 'error',
         duration: 3000,
         isClosable: true,
       })
-      setEditingField(null)
       return
     }
     
-    setIsRenamingField(true)
-    
-    try {
-      const updatedTable = await updateTableFields(currentTable.id, {
-        action: 'rename',
-        fieldName: oldName,
-        newFieldName: newName,
-      })
-      
-      if (updatedTable) {
-        toast({
-          title: '字段重命名成功',
-          status: 'success',
-          duration: 2000,
-          isClosable: true,
-        })
-        setEditingField(null)
-      }
-    } catch (error) {
-      console.error('重命名字段失败:', error)
-      toast({
-        title: '重命名字段失败',
-        description: error instanceof Error ? error.message : '未知错误',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      })
-    } finally {
-      setIsRenamingField(false)
-    }
+    // 添加到未保存更改
+    addFieldRename(oldName, newName)
   }
   
   // 取消重命名
@@ -601,6 +551,147 @@ export default function CustomFieldsTablePage() {
     setPendingDeleteTable(null)
     onDeleteTableClose()
   }
+  
+  // 检查是否有未保存的更改
+  const hasUnsavedChanges = () => {
+    return pendingChanges.fieldRenames.length > 0 || 
+           pendingChanges.cellUpdates.length > 0 || 
+           pendingChanges.newRows.length > 0
+  }
+  
+  // 清空所有未保存的更改
+  const clearPendingChanges = () => {
+    setPendingChanges({
+      fieldRenames: [],
+      cellUpdates: [],
+      newRows: []
+    })
+  }
+  
+  // 添加字段重命名到未保存更改
+  const addFieldRename = (oldName: string, newName: string) => {
+    setPendingChanges(prev => ({
+      ...prev,
+      fieldRenames: [
+        ...prev.fieldRenames.filter(r => r.oldName !== oldName),
+        { oldName, newName }
+      ]
+    }))
+  }
+  
+  // 添加单元格更新到未保存更改
+  const addCellUpdate = (rowId: number, field: string, value: string, originalValue: string) => {
+    setPendingChanges(prev => ({
+      ...prev,
+      cellUpdates: [
+        ...prev.cellUpdates.filter(u => !(u.rowId === rowId && u.field === field)),
+        { rowId, field, value, originalValue }
+      ]
+    }))
+  }
+  
+  // 添加新行到未保存更改
+  const addNewRow = (tempId: string, data: Record<string, string>) => {
+    setPendingChanges(prev => ({
+      ...prev,
+      newRows: [
+        ...prev.newRows.filter(r => r.tempId !== tempId),
+        { tempId, data }
+      ]
+    }))
+  }
+  
+  // 统一保存所有更改
+  const saveAllChanges = async () => {
+    if (!currentTable || !hasUnsavedChanges()) return
+    
+    setIsSavingChanges(true)
+    try {
+      // 1. 保存字段重命名
+      for (const rename of pendingChanges.fieldRenames) {
+        if (rename.oldName !== rename.newName) {
+          await updateTableFields(currentTable.id, {
+            action: 'rename',
+            fieldName: rename.oldName,
+            newFieldName: rename.newName,
+          })
+        }
+      }
+      
+      // 2. 保存单元格更新
+      for (const update of pendingChanges.cellUpdates) {
+        if (update.value !== update.originalValue) {
+          await updateCellValue(currentTable.id, update.rowId, update.field, update.value)
+        }
+      }
+      
+      // 3. 保存新增行
+      for (const newRow of pendingChanges.newRows) {
+        await updateTableRow(currentTable.id, 'add', undefined, newRow.data)
+      }
+      
+      // 清空未保存更改
+      clearPendingChanges()
+      
+      toast({
+        title: '保存成功',
+        description: '所有更改已保存',
+        status: 'success',
+        duration: 2000,
+        isClosable: true,
+      })
+      
+    } catch (error) {
+      console.error('保存失败:', error)
+      toast({
+        title: '保存失败',
+        description: error instanceof Error ? error.message : '未知错误',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+    } finally {
+      setIsSavingChanges(false)
+    }
+  }
+  
+  // Excel导出功能
+  const handleExportExcel = async () => {
+    if (!currentTable) {
+      toast({
+        title: '请先选择一个表格',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      })
+      return
+    }
+
+    try {
+      const result = await exportToExcel(
+        currentTable,
+        undefined, // 导出所有数据
+        `${currentTable.tableName}_完整数据_${new Date().toISOString().split('T')[0]}`
+      )
+      
+      toast({
+        title: '导出成功',
+        description: `已导出Excel文件，包含 ${result.count} 条数据`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+    } catch (error) {
+      console.error('导出失败:', error)
+      toast({
+        title: '导出失败',
+        description: error instanceof Error ? error.message : '未知错误',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+    }
+  }
 
   // 批量操作函数
   const handleBatchEdit = () => {
@@ -628,7 +719,7 @@ export default function CustomFieldsTablePage() {
     }
   }
 
-  const handleExportSelected = () => {
+  const handleExportSelected = async () => {
     if (!currentTable || selectedRows.length === 0) {
       toast({
         title: '请选择要导出的数据',
@@ -639,36 +730,36 @@ export default function CustomFieldsTablePage() {
       return
     }
 
-    // 导出选中数据为JSON格式
-    const selectedData = currentTable.extendedField.filter(row => 
-      selectedRows.includes(row.id)
-    )
-    
-    const exportData = {
-      tableName: currentTable.tableName,
-      tableFields: currentTable.tableFields,
-      data: selectedData,
-      exportTime: new Date().toISOString(),
-      count: selectedData.length
+    try {
+      // 获取选中的数据
+      const selectedData = currentTable.extendedField.filter(row => 
+        selectedRows.includes(row.id)
+      )
+      
+      // 导出为Excel文件
+      const result = await exportToExcel(
+        currentTable,
+        selectedData,
+        `${currentTable.tableName}_选中数据_${new Date().toISOString().split('T')[0]}`
+      )
+      
+      toast({
+        title: '导出成功',
+        description: `已导出Excel文件，包含 ${result.count} 条数据`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+    } catch (error) {
+      console.error('导出失败:', error)
+      toast({
+        title: '导出失败',
+        description: error instanceof Error ? error.message : '未知错误',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
     }
-    
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-      type: 'application/json'
-    })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${currentTable.type}_数据_${new Date().toISOString().split('T')[0]}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-    
-    toast({
-      title: '导出成功',
-      description: `已导出 ${selectedData.length} 条数据`,
-      status: 'success',
-      duration: 3000,
-      isClosable: true,
-    })
   }
 
   // 表单验证
@@ -840,15 +931,43 @@ export default function CustomFieldsTablePage() {
               <TableToolbar
                 onCreateTable={handleCreateTable}
                 onImportData={() => console.log('导入数据')}
-                onExportData={() => console.log('导出数据')}
-                onExportExcel={() => console.log('导出Excel')}
+                onExportExcel={handleExportExcel}
                 onRefresh={() => {
                   fetchTables()
                   fetchStats()
                 }}
                 onSearch={setSearchTerm}
                 loading={tableLoading}
+                hasUnsavedChanges={hasUnsavedChanges()}
+                unsavedChangesCount={
+                  pendingChanges.fieldRenames.length + 
+                  pendingChanges.cellUpdates.length + 
+                  pendingChanges.newRows.length
+                }
+                onSaveAllChanges={saveAllChanges}
+                isSavingChanges={isSavingChanges}
               />
+              
+              {/* 未保存更改提示 */}
+              {hasUnsavedChanges() && (
+                <Box
+                  bg="orange.50"
+                  borderColor="orange.200"
+                  borderWidth="1px"
+                  borderRadius="md"
+                  p={3}
+                  mb={4}
+                >
+                  <HStack spacing={2}>
+                    <Icon as={RiInformationLine} color="orange.500" />
+                    <Text fontSize="sm" color="orange.700">
+                      您有 <Text as="span" fontWeight="bold">
+                        {pendingChanges.fieldRenames.length + pendingChanges.cellUpdates.length + pendingChanges.newRows.length}
+                      </Text> 项未保存的更改，请点击“保存更改”按钮进行保存。
+                    </Text>
+                  </HStack>
+                </Box>
+              )}
 
               {/* 数据表格 */}
               <Card p={0} overflow="hidden">
@@ -867,7 +986,7 @@ export default function CustomFieldsTablePage() {
                   onFieldRename={handleFieldRename}
                   editingField={editingField}
                   onEditingFieldChange={setEditingField}
-                  isRenamingField={isRenamingField}
+                  pendingFieldRenames={pendingChanges.fieldRenames}
                   onCancelRename={handleCancelRename}
                   onAddField={handleAddField}
                   pendingNewField={pendingNewField}
@@ -878,13 +997,13 @@ export default function CustomFieldsTablePage() {
                   loading={tableLoading}
                   sortField={sortField}
                   sortOrder={sortOrder}
-                  pendingRow={pendingRow}
-                  onPendingRowUpdate={handlePendingRowUpdate}
-                  onPendingRowSave={handlePendingRowSave}
-                  onPendingRowCancel={handlePendingRowCancel}
+                  newRows={pendingChanges.newRows}
+                  onNewRowUpdate={handleNewRowUpdate}
                   isAddingRow={isAddingRow}
                   isDeletingRow={isDeletingRow}
                   pendingDeleteRowId={pendingDeleteRow?.id}
+                  pendingCellUpdates={pendingChanges.cellUpdates}
+                  onCellValueChange={addCellUpdate}
                 />
               </Card>
 

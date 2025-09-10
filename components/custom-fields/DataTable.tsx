@@ -57,7 +57,7 @@ interface DataTableProps {
   onFieldRename?: (oldName: string, newName: string) => void
   editingField?: string | null
   onEditingFieldChange?: (field: string | null) => void
-  isRenamingField?: boolean
+  pendingFieldRenames?: { oldName: string; newName: string }[]
   onCancelRename?: () => void
   onAddField?: () => void
   pendingNewField?: string | null
@@ -68,13 +68,13 @@ interface DataTableProps {
   loading?: boolean
   sortField?: string
   sortOrder?: 'asc' | 'desc'
-  pendingRow?: TableRow | null
-  onPendingRowUpdate?: (field: string, value: string) => void
-  onPendingRowSave?: () => Promise<void>
-  onPendingRowCancel?: () => void
+  newRows?: { tempId: string; data: Record<string, string> }[]
+  onNewRowUpdate?: (tempId: string, field: string, value: string) => void
   isAddingRow?: boolean
   isDeletingRow?: boolean
   pendingDeleteRowId?: number
+  pendingCellUpdates?: { rowId: number; field: string; value: string; originalValue: string }[]
+  onCellValueChange?: (rowId: number, field: string, value: string, originalValue: string) => void
 }
 
 export function DataTable({
@@ -93,7 +93,7 @@ export function DataTable({
   onFieldRename,
   editingField,
   onEditingFieldChange,
-  isRenamingField,
+  pendingFieldRenames,
   onCancelRename,
   onAddField,
   pendingNewField,
@@ -104,13 +104,13 @@ export function DataTable({
   loading = false,
   sortField,
   sortOrder,
-  pendingRow,
-  onPendingRowUpdate,
-  onPendingRowSave,
-  onPendingRowCancel,
+  newRows = [],
+  onNewRowUpdate,
   isAddingRow = false,
   isDeletingRow = false,
   pendingDeleteRowId,
+  pendingCellUpdates = [],
+  onCellValueChange,
 }: DataTableProps) {
   const [tempFieldName, setTempFieldName] = useState<string>('')
   
@@ -233,55 +233,39 @@ export function DataTable({
                   >
                     <HStack spacing={2} justify="space-between">
                       {editingField === field ? (
-                        <HStack spacing={1} flex={1}>
-                          <Input
-                            value={tempFieldName}
-                            onChange={(e) => {
-                              setTempFieldName(e.target.value)
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                const newName = e.currentTarget.value.trim()
-                                if (newName && newName !== field && onFieldRename) {
-                                  onFieldRename(field, newName)
-                                }
-                              } else if (e.key === 'Escape') {
-                                onCancelRename?.()
-                              }
-                            }}
-                            size="sm"
-                            fontWeight="semibold"
-                            border="1px solid"
-                            borderColor="blue.300"
-                            autoFocus
-                            onFocus={(e) => e.target.select()}
-                            flex={1}
-                            minWidth="80px"
-                            maxWidth="150px"
-                          />
-                          <IconButton
-                            icon={<RiCheckLine />}
-                            size="xs"
-                            colorScheme="green"
-                            aria-label="保存重命名"
-                            onClick={() => {
-                              const newName = tempFieldName.trim()
+                        <Input
+                          value={tempFieldName}
+                          onChange={(e) => {
+                            setTempFieldName(e.target.value)
+                          }}
+                          onBlur={(e) => {
+                            const newName = e.target.value.trim()
+                            if (newName && newName !== field && onFieldRename) {
+                              onFieldRename(field, newName)
+                            }
+                            handleStopEditing()
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const newName = e.currentTarget.value.trim()
                               if (newName && newName !== field && onFieldRename) {
                                 onFieldRename(field, newName)
                               }
-                            }}
-                            isLoading={isRenamingField}
-                            isDisabled={!tempFieldName.trim() || tempFieldName.trim() === field}
-                          />
-                          <IconButton
-                            icon={<RiCloseLine />}
-                            size="xs"
-                            variant="ghost"
-                            aria-label="取消重命名"
-                            onClick={onCancelRename}
-                            isDisabled={isRenamingField}
-                          />
-                        </HStack>
+                              handleStopEditing()
+                            } else if (e.key === 'Escape') {
+                              handleStopEditing()
+                            }
+                          }}
+                          size="sm"
+                          fontWeight="semibold"
+                          border="1px solid"
+                          borderColor="blue.300"
+                          autoFocus
+                          onFocus={(e) => e.target.select()}
+                          flex={1}
+                          minWidth="80px"
+                          maxWidth="150px"
+                        />
                       ) : (
                         <Text 
                           fontWeight="semibold" 
@@ -297,8 +281,10 @@ export function DataTable({
                           px={1}
                           borderRadius="sm"
                           title={!isTitle ? "双击重命名" : ""}
+                          color={pendingFieldRenames?.find(r => r.oldName === field) ? "orange.500" : "inherit"}
+                          fontStyle={pendingFieldRenames?.find(r => r.oldName === field) ? "italic" : "normal"}
                         >
-                          {field}
+                          {pendingFieldRenames?.find(r => r.oldName === field)?.newName || field}
                         </Text>
                       )}
                       
@@ -458,10 +444,12 @@ export function DataTable({
                       } : {})}
                     >
                       <EditableCell
-                        value={row[field] || ''}
-                        onSave={(newValue) => handleCellUpdate(row.id, field, newValue)}
+                        value={pendingCellUpdates.find(u => u.rowId === row.id && u.field === field)?.value || row[field] || ''}
+                        originalValue={row[field] || ''}
+                        onValueChange={(newValue) => onCellValueChange?.(row.id, field, newValue, row[field] || '')}
                         isTitle={isTitle}
                         placeholder={`输入${field}...`}
+                        isPending={!!pendingCellUpdates.find(u => u.rowId === row.id && u.field === field)}
                       />
                     </Td>
                   )
@@ -484,7 +472,7 @@ export function DataTable({
                       onClick={() => onRowDuplicate(row.id)}
                       aria-label="复制行"
                       title="复制行"
-                      isDisabled={isDeletingRow || !!pendingRow}
+                      isDisabled={isDeletingRow || newRows.length > 0}
                     />
                     <IconButton
                       icon={<RiDeleteBinLine />}
@@ -495,7 +483,7 @@ export function DataTable({
                       aria-label="删除行"
                       title="删除行"
                       isLoading={isDeletingRow && pendingDeleteRowId === row.id}
-                      isDisabled={isDeletingRow || !!pendingRow}
+                      isDisabled={isDeletingRow || newRows.length > 0}
                     />
                   </HStack>
                 </Td>
@@ -503,9 +491,9 @@ export function DataTable({
             )
           })}
 
-          {/* 待编辑的新行 */}
-          {pendingRow && (
-            <Tr bg={newRowBgColor} borderWidth="2px" borderColor={newRowBorderColor}>
+          {/* 待编辑的新行们 */}
+          {newRows.map((newRow) => (
+            <Tr key={newRow.tempId} bg={newRowBgColor} borderWidth="2px" borderColor={newRowBorderColor}>
               {/* 选择框 - 禁用状态 */}
               <Td position="sticky" left={0} bg="inherit" zIndex={1}>
                 <Checkbox isDisabled />
@@ -534,11 +522,13 @@ export function DataTable({
                     } : {})}
                   >
                     <EditableCell
-                      value={pendingRow[field] || ''}
-                      onSave={(newValue) => onPendingRowUpdate?.(field, newValue)}
+                      value={newRow.data[field] || ''}
+                      originalValue=''
+                      onValueChange={(newValue) => onNewRowUpdate?.(newRow.tempId, field, newValue)}
                       isTitle={isTitle}
                       placeholder={`输入${field}...`}
                       autoFocus={isTitle}
+                      isPending={true}
                     />
                   </Td>
                 )
@@ -551,33 +541,15 @@ export function DataTable({
                 </Td>
               )}
 
-              {/* 保存/取消按钮 */}
+              {/* 操作列暂时保留空占位 */}
               <Td>
-                <HStack spacing={1}>
-                  <Button
-                    size="sm"
-                    colorScheme="green"
-                    onClick={onPendingRowSave}
-                    isLoading={isAddingRow}
-                    loadingText="保存中"
-                  >
-                    保存
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={onPendingRowCancel}
-                    isDisabled={isAddingRow}
-                  >
-                    取消
-                  </Button>
-                </HStack>
+                {/* 操作将通过统一保存按钮处理 */}
               </Td>
             </Tr>
-          )}
+          ))}
 
           {/* 添加新行按钮 */}
-          {!pendingRow && (
+          {newRows.length === 0 && (
             <Tr bg="gray.25" _hover={{ bg: "gray.50" }}>
               <Td colSpan={2} position="sticky" left={0} bg="inherit" zIndex={1}>
                 <Icon as={RiAddLine} color="gray.400" />
