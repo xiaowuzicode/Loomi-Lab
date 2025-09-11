@@ -1011,7 +1011,7 @@ export class CustomFieldStorage {
   private async transformCustomFieldData(record: any) {
     // 对于自定义字段系统：管理员UUID显示为管理员，其他用户查询真实姓名
     let createdUserName: string
-    if (record.created_user_id === '00000000-0000-0000-0000-000000000001') {
+    if (record.created_user_id === '00000000-0000-4000-8000-000000000001') {
       createdUserName = '管理员'
     } else {
       try {
@@ -1022,27 +1022,12 @@ export class CustomFieldStorage {
       }
     }
 
-    // 处理扩展字段数据，支持新旧格式兼容
     let extendedField = record.extended_field || []
     let tableFields: string[] = []
 
-    // 检测数据格式：新格式为数组，旧格式为对象数组
     if (Array.isArray(extendedField) && extendedField.length > 0) {
       const firstItem = extendedField[0]
-      
-      // 旧格式：[{key, label, value, required}] 转换为新格式
-      if (firstItem && 'key' in firstItem && 'label' in firstItem && 'value' in firstItem) {
-        const convertedData: { id: number; [key: string]: any } = { id: 1 }
-        extendedField.forEach((field: any) => {
-          convertedData[field.label] = field.value || ''
-          if (!tableFields.includes(field.label)) {
-            tableFields.push(field.label)
-          }
-        })
-        extendedField = [convertedData]
-      } 
-      // 新格式：[{id, 标题, 正文, ...}] 直接使用
-      else if (firstItem && 'id' in firstItem) {
+      if (firstItem && 'id' in firstItem) {
         tableFields = Object.keys(firstItem).filter(key => key !== 'id')
         // 确保标题字段在首位
         if (tableFields.includes('标题')) {
