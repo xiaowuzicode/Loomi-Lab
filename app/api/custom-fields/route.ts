@@ -1,26 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { customFieldStorage } from '@/lib/supabase'
-import { verifyToken } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
-    const token = request.headers.get('authorization')?.replace('Bearer ', '')
-    const user = token ? verifyToken(token) : null
-
     const { searchParams } = new URL(request.url)
+    const userId = searchParams.get('userId')
     const id = searchParams.get('id')
     const action = searchParams.get('action')
+
+    // 验证必填的userId参数
+    if (!userId) {
+      return NextResponse.json({
+        success: false,
+        error: '缺少必填参数：userId'
+      }, { status: 400 })
+    }
+
+    // 验证UUID格式
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(userId)) {
+      return NextResponse.json({
+        success: false,
+        error: 'userId格式无效，必须是标准UUID格式'
+      }, { status: 400 })
+    }
     
     // 获取统计信息
     if (action === 'stats') {
-      const userId = user?.userId || 'admin-001' // 使用验证用户ID或默认admin-001
       const stats = await customFieldStorage.getStats(userId)
       return NextResponse.json({
         success: true,
         data: stats
       })
     }
-
 
     // 获取列表（分页）
     if (action === 'list' || (!id && !action)) {
@@ -38,8 +50,6 @@ export async function GET(request: NextRequest) {
       const isPublic = searchParams.get('isPublic') === 'true' ? true : searchParams.get('isPublic') === 'false' ? false : undefined
       const sortBy = searchParams.get('sortBy') || 'created_at'
       const sortOrder = (searchParams.get('sortOrder') as 'asc' | 'desc') || 'desc'
-
-      const userId = user?.userId || 'admin-001' // 使用验证用户ID或默认admin-001
 
       const result = await customFieldStorage.getCustomFields({
         page,
@@ -73,7 +83,14 @@ export async function GET(request: NextRequest) {
 
     // 根据ID查询单条记录
     if (id) {
-      const userId = user?.userId || 'admin-001' // 使用验证用户ID或默认admin-001
+      // 验证表格ID的UUID格式
+      if (!uuidRegex.test(id)) {
+        return NextResponse.json({
+          success: false,
+          error: '表格ID格式无效，必须是标准UUID格式'
+        }, { status: 400 })
+      }
+
       const record = await customFieldStorage.getCustomFieldById(id, userId)
       
       if (!record) {
@@ -105,18 +122,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const token = request.headers.get('authorization')?.replace('Bearer ', '')
-    const user = token ? verifyToken(token) : null
-
-    if (!user) {
-      return NextResponse.json({
-        success: false,
-        error: '未授权访问'
-      }, { status: 401 })
-    }
-
     const body = await request.json()
     const {
+      userId,
+      createdUserId,
       appCode,
       type,
       tableName,
@@ -127,6 +136,23 @@ export async function POST(request: NextRequest) {
       visibility = true,
       isPublic = false
     } = body
+
+    // 验证必填参数
+    if (!userId || !createdUserId) {
+      return NextResponse.json({
+        success: false,
+        error: '缺少必填参数：userId 和 createdUserId'
+      }, { status: 400 })
+    }
+
+    // 验证UUID格式
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(userId) || !uuidRegex.test(createdUserId)) {
+      return NextResponse.json({
+        success: false,
+        error: 'userId 和 createdUserId 格式无效，必须是标准UUID格式'
+      }, { status: 400 })
+    }
 
     // 基础验证
     if (!appCode || !type || !tableName || !readme || !extendedField) {
@@ -170,8 +196,8 @@ export async function POST(request: NextRequest) {
     }
 
     const record = await customFieldStorage.createCustomField({
-      userId: '00000000-0000-0000-0000-000000000001', // 使用有效的UUID格式代表管理员
-      createdUserId: '00000000-0000-0000-0000-000000000001', // 使用有效的UUID格式代表管理员
+      userId,
+      createdUserId,
       appCode,
       type,
       tableName: tableName.trim(),
@@ -200,28 +226,10 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const token = request.headers.get('authorization')?.replace('Bearer ', '')
-    const user = token ? verifyToken(token) : null
-
-    if (!user) {
-      return NextResponse.json({
-        success: false,
-        error: '未授权访问'
-      }, { status: 401 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const id = searchParams.get('id')
-
-    if (!id) {
-      return NextResponse.json({
-        success: false,
-        error: '缺少记录ID'
-      }, { status: 400 })
-    }
-
     const body = await request.json()
     const {
+      userId,
+      id,
       appCode,
       extendedField,
       amount,
@@ -230,6 +238,23 @@ export async function PUT(request: NextRequest) {
       visibility,
       isPublic
     } = body
+
+    // 验证必填参数
+    if (!userId || !id) {
+      return NextResponse.json({
+        success: false,
+        error: '缺少必填参数：userId 和 id'
+      }, { status: 400 })
+    }
+
+    // 验证UUID格式
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(userId) || !uuidRegex.test(id)) {
+      return NextResponse.json({
+        success: false,
+        error: 'userId 和 id 格式无效，必须是标准UUID格式'
+      }, { status: 400 })
+    }
 
     const updates: any = {}
     
@@ -260,7 +285,7 @@ export async function PUT(request: NextRequest) {
     if (visibility !== undefined) updates.visibility = visibility
     if (isPublic !== undefined) updates.isPublic = isPublic
 
-    const record = await customFieldStorage.updateCustomField(id, user.userId, updates)
+    const record = await customFieldStorage.updateCustomField(id, userId, updates)
 
     if (!record) {
       return NextResponse.json({
@@ -286,27 +311,27 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const token = request.headers.get('authorization')?.replace('Bearer ', '')
-    const user = token ? verifyToken(token) : null
+    const body = await request.json()
+    const { userId, id } = body
 
-    if (!user) {
+    // 验证必填参数
+    if (!userId || !id) {
       return NextResponse.json({
         success: false,
-        error: '未授权访问'
-      }, { status: 401 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const id = searchParams.get('id')
-
-    if (!id) {
-      return NextResponse.json({
-        success: false,
-        error: '缺少记录ID'
+        error: '缺少必填参数：userId 和 id'
       }, { status: 400 })
     }
 
-    const record = await customFieldStorage.deleteCustomField(id, user.userId)
+    // 验证UUID格式
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(userId) || !uuidRegex.test(id)) {
+      return NextResponse.json({
+        success: false,
+        error: 'userId 和 id 格式无效，必须是标准UUID格式'
+      }, { status: 400 })
+    }
+
+    const record = await customFieldStorage.deleteCustomField(id, userId)
 
     if (!record) {
       return NextResponse.json({

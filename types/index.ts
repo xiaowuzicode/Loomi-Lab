@@ -329,11 +329,6 @@ export interface FieldOperation {
   newFieldName?: string
 }
 
-export interface BatchOperation {
-  action: 'edit' | 'delete' | 'export'
-  rowIds: number[]
-  updates?: Record<string, any>
-}
 
 // 向后兼容的输入类型
 export interface CustomFieldInput {

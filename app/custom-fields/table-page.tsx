@@ -175,7 +175,6 @@ export default function CustomFieldsTablePage() {
     setCurrentTable: setHookCurrentTable,
     updateTableFields,
     updateTableRow,
-    batchUpdateTableRows,
     updateCellValue,
   } = useTableCustomFields()
 
@@ -693,29 +692,32 @@ export default function CustomFieldsTablePage() {
     }
   }
 
-  // 批量操作函数
-  const handleBatchEdit = () => {
-    // TODO: 实现批量编辑模态框
-    toast({
-      title: '功能开发中',
-      description: '批量编辑功能正在开发中',
-      status: 'info',
-      duration: 3000,
-      isClosable: true,
-    })
-  }
-
+  // 批量删除函数
   const handleBatchDelete = async () => {
     if (!currentTable || selectedRows.length === 0) return
     
     try {
-      await batchUpdateTableRows(currentTable.id, {
-        action: 'delete',
-        rowIds: selectedRows
-      })
+      // 逐个删除选中的行
+      for (const rowId of selectedRows) {
+        await updateTableRow(currentTable.id, 'delete', rowId)
+      }
       setSelectedRows([])
+      toast({
+        title: '删除成功',
+        description: `已删除 ${selectedRows.length} 条记录`,
+        status: 'success',
+        duration: 2000,
+        isClosable: true,
+      })
     } catch (error) {
       console.error('批量删除失败:', error)
+      toast({
+        title: '删除失败',
+        description: error instanceof Error ? error.message : '未知错误',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
     }
   }
 
@@ -1010,7 +1012,6 @@ export default function CustomFieldsTablePage() {
               {/* 批量操作栏 */}
               <BatchOperationBar
                 selectedCount={selectedRows.length}
-                onBatchEdit={handleBatchEdit}
                 onBatchDelete={handleBatchDelete}
                 onExportSelected={handleExportSelected}
                 onClearSelection={() => setSelectedRows([])}

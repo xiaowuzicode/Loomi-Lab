@@ -1233,61 +1233,6 @@ export class CustomFieldStorage {
     }
   }
 
-  /**
-   * 批量行操作
-   */
-  async batchUpdateTableRows(
-    id: string,
-    userId: string,
-    operations: {
-      action: 'update' | 'delete',
-      rowIds: number[],
-      updates?: Record<string, any>
-    }
-  ) {
-    try {
-      const currentRecord = await this.getCustomFieldById(id, userId)
-      if (!currentRecord) {
-        throw new Error('记录不存在')
-      }
-
-      let updatedData = [...currentRecord.extendedField]
-
-      switch (operations.action) {
-        case 'update':
-          if (operations.updates) {
-            updatedData = updatedData.map(row =>
-              operations.rowIds.includes(row.id)
-                ? { ...row, ...operations.updates }
-                : row
-            )
-          }
-          break
-
-        case 'delete':
-          updatedData = updatedData.filter(row => !operations.rowIds.includes(row.id))
-          break
-      }
-
-      // 更新数据库
-      const { data, error } = await this.supabase
-        .from('book_user_custom_fields')
-        .update({
-          extended_field: updatedData,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id)
-        .eq('is_deleted', false)
-        .select()
-        .single()
-
-      if (error) throw error
-      return await this.transformCustomFieldData(data)
-    } catch (error) {
-      console.error('批量操作失败:', error)
-      throw error
-    }
-  }
 }
 
 // 创建全局实例

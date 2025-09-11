@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { useToast } from '@chakra-ui/react'
+import { useAuth } from '@/hooks/useAuth'
 import { 
   CustomFieldRecord, 
   CustomFieldForm, 
@@ -9,7 +10,6 @@ import {
   CustomFieldListParams,
   TableRow,
   FieldOperation,
-  BatchOperation,
   ApiResponse 
 } from '@/types'
 
@@ -37,14 +37,30 @@ export function useTableCustomFields() {
     总计: 0
   })
   const toast = useToast()
+  const { user, isAuthenticated } = useAuth()
 
   // 获取表格列表
   const fetchTables = useCallback(async (params: CustomFieldListParams = {}) => {
+    if (!isAuthenticated || !user?.id) {
+      setError('用户未登录或用户信息不完整')
+      setLoading(false)
+      return {
+        records: [],
+        pagination: {
+          page: 1,
+          limit: 10,
+          total: 0,
+          totalPages: 0
+        }
+      }
+    }
+
     setLoading(true)
     setError(null)
 
     try {
       const searchParams = new URLSearchParams({
+        userId: user.id,
         action: 'list',
         page: String(params.page || 1),
         limit: String(params.limit || 10),
@@ -63,17 +79,7 @@ export function useTableCustomFields() {
       if (params.visibility !== undefined) searchParams.set('visibility', String(params.visibility))
       if (params.isPublic !== undefined) searchParams.set('isPublic', String(params.isPublic))
 
-      const token = localStorage.getItem('auth_token')
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json'
-      }
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-      }
-
-      const response = await fetch(`/api/custom-fields?${searchParams}`, {
-        headers
-      })
+      const response = await fetch(`/api/custom-fields?${searchParams}`)
       const result: ApiResponse<CustomFieldRecord[]> = await response.json()
 
       if (result.success && result.data) {
@@ -107,23 +113,28 @@ export function useTableCustomFields() {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, isAuthenticated, user])
 
   // 获取统计信息
   const fetchStats = useCallback(async () => {
+    if (!isAuthenticated || !user?.id) {
+      setStatsLoading(false)
+      return {
+        洞察: 0,
+        钩子: 0,
+        情绪: 0,
+        总计: 0
+      }
+    }
+
     setStatsLoading(true)
     try {
-      const token = localStorage.getItem('auth_token')
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json'
-      }
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-      }
-
-      const response = await fetch('/api/custom-fields?action=stats', {
-        headers
+      const searchParams = new URLSearchParams({
+        userId: user.id,
+        action: 'stats'
       })
+
+      const response = await fetch(`/api/custom-fields?${searchParams}`)
       const result: ApiResponse<CustomFieldStats> = await response.json()
 
       if (result.success && result.data) {
@@ -146,23 +157,23 @@ export function useTableCustomFields() {
     } finally {
       setStatsLoading(false)
     }
-  }, [])
+  }, [isAuthenticated, user])
 
   // 获取单个表格详情
   const fetchTableById = useCallback(async (id: string): Promise<CustomFieldRecord | null> => {
+    if (!isAuthenticated || !user?.id) {
+      setTableLoading(false)
+      return null
+    }
+
     setTableLoading(true)
     try {
-      const token = localStorage.getItem('auth_token')
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json'
-      }
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-      }
-
-      const response = await fetch(`/api/custom-fields?id=${id}`, {
-        headers
+      const searchParams = new URLSearchParams({
+        userId: user.id,
+        id: id
       })
+
+      const response = await fetch(`/api/custom-fields?${searchParams}`)
       const result: ApiResponse<CustomFieldRecord> = await response.json()
 
       if (result.success && result.data) {
@@ -184,18 +195,19 @@ export function useTableCustomFields() {
     } finally {
       setTableLoading(false)
     }
-  }, [toast])
+  }, [toast, isAuthenticated, user])
 
   // 创建新表格
   const createTable = useCallback(async (formData: CustomFieldForm & { type: string }): Promise<CustomFieldRecord | null> => {
-    try {
-      const token = localStorage.getItem('auth_token')
-      if (!token) {
-        throw new Error('请先登录')
-      }
+    if (!isAuthenticated || !user?.id) {
+      throw new Error('用户未登录或用户信息不完整')
+    }
 
+    try {
       // 转换数据格式以匹配后端API期望的格式
       const transformedData = {
+        userId: user.id,
+        createdUserId: user.id,
         ...formData,
         extendedField: [
           { key: 'title', label: '标题', value: '', required: true }
@@ -204,10 +216,6 @@ export function useTableCustomFields() {
 
       const response = await fetch('/api/custom-fields', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
         body: JSON.stringify(transformedData)
       })
 
@@ -237,26 +245,27 @@ export function useTableCustomFields() {
       })
       return null
     }
-  }, [toast])
+  }, [toast, isAuthenticated, user])
 
   // 字段操作
   const updateTableFields = useCallback(async (
     tableId: string, 
     operation: FieldOperation
   ): Promise<CustomFieldRecord | null> => {
+    if (!isAuthenticated || !user?.id) {
+      throw new Error('用户未登录或用户信息不完整')
+    }
+
     try {
-      const token = localStorage.getItem('auth_token')
-      if (!token) {
-        throw new Error('请先登录')
+      const requestData = {
+        userId: user.id,
+        id: tableId,
+        ...operation
       }
 
-      const response = await fetch(`/api/custom-fields/fields?id=${tableId}`, {
+      const response = await fetch('/api/custom-fields/fields', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(operation)
+        body: JSON.stringify(requestData)
       })
 
       const result: ApiResponse<CustomFieldRecord> = await response.json()
@@ -293,7 +302,7 @@ export function useTableCustomFields() {
       })
       return null
     }
-  }, [currentTable, toast])
+  }, [currentTable, toast, isAuthenticated, user])
 
   // 行操作
   const updateTableRow = useCallback(async (
@@ -302,35 +311,31 @@ export function useTableCustomFields() {
     rowId?: number,
     rowData?: Record<string, any>
   ): Promise<CustomFieldRecord | null> => {
+    if (!isAuthenticated || !user?.id) {
+      throw new Error('用户未登录或用户信息不完整')
+    }
+
     try {
-      const token = localStorage.getItem('auth_token')
-      if (!token) {
-        throw new Error('请先登录')
+      let method: string
+      let body: any = { 
+        userId: user.id,
+        id: tableId,
+        action, 
+        rowData,
+        ...(rowId && { rowId })
       }
 
-      let url: string
-      let method: string
-      let body: any = { action, rowData }
-
       if (action === 'add') {
-        url = `/api/custom-fields/rows?id=${tableId}`
         method = 'POST'
       } else if (action === 'delete') {
-        url = `/api/custom-fields/rows?id=${tableId}&rowId=${rowId}`
         method = 'DELETE'
-        body = undefined
       } else {
-        url = `/api/custom-fields/rows?id=${tableId}&rowId=${rowId}`
         method = 'PUT'
       }
 
-      const response = await fetch(url, {
+      const response = await fetch('/api/custom-fields/rows', {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: body ? JSON.stringify(body) : undefined
+        body: JSON.stringify(body)
       })
 
       const result: ApiResponse<CustomFieldRecord> = await response.json()
@@ -370,79 +375,24 @@ export function useTableCustomFields() {
       })
       return null
     }
-  }, [currentTable, toast])
+  }, [currentTable, toast, isAuthenticated, user])
 
-  // 批量行操作
-  const batchUpdateTableRows = useCallback(async (
-    tableId: string,
-    operation: BatchOperation
-  ): Promise<CustomFieldRecord | null> => {
-    try {
-      const token = localStorage.getItem('auth_token')
-      if (!token) {
-        throw new Error('请先登录')
-      }
-
-      const response = await fetch(`/api/custom-fields/rows?id=${tableId}&batch=true`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(operation)
-      })
-
-      const result: ApiResponse<CustomFieldRecord> = await response.json()
-
-      if (result.success && result.data) {
-        // 更新当前表格
-        if (currentTable && currentTable.id === tableId) {
-          setCurrentTable(result.data)
-        }
-
-        const actionText = {
-          edit: '批量编辑',
-          delete: '批量删除',
-          export: '批量导出'
-        }[operation.action]
-
-        toast({
-          title: '成功',
-          description: result.message || `${actionText}成功`,
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        })
-        return result.data
-      } else {
-        throw new Error(result.error || '批量操作失败')
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '批量操作失败'
-      toast({
-        title: '错误',
-        description: errorMessage,
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      })
-      return null
-    }
-  }, [currentTable, toast])
 
   // 删除表格
   const deleteTable = useCallback(async (id: string): Promise<boolean> => {
+    if (!isAuthenticated || !user?.id) {
+      throw new Error('用户未登录或用户信息不完整')
+    }
+
     try {
-      const token = localStorage.getItem('auth_token')
-      if (!token) {
-        throw new Error('请先登录')
+      const requestData = {
+        userId: user.id,
+        id: id
       }
 
-      const response = await fetch(`/api/custom-fields?id=${id}`, {
+      const response = await fetch('/api/custom-fields', {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        body: JSON.stringify(requestData)
       })
 
       const result: ApiResponse<CustomFieldRecord> = await response.json()
@@ -475,7 +425,7 @@ export function useTableCustomFields() {
       })
       return false
     }
-  }, [currentTable, toast])
+  }, [currentTable, toast, isAuthenticated, user])
 
   // 单行字段更新（用于行内编辑）
   const updateCellValue = useCallback(async (
@@ -511,7 +461,6 @@ export function useTableCustomFields() {
     
     // 行操作
     updateTableRow,
-    batchUpdateTableRows,
     updateCellValue,
   }
 }

@@ -1,32 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { customFieldStorage } from '@/lib/supabase'
-import { verifyToken } from '@/lib/auth'
 
 // PUT /api/custom-fields/fields - 字段操作
 export async function PUT(request: NextRequest) {
   try {
-    const token = request.headers.get('authorization')?.replace('Bearer ', '')
-    const user = token ? verifyToken(token) : null
+    const body = await request.json()
+    const { userId, id, action, fieldName, newFieldName } = body
 
-    if (!user) {
+    // 验证必填参数
+    if (!userId || !id) {
       return NextResponse.json({
         success: false,
-        error: '未授权访问'
-      }, { status: 401 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const tableId = searchParams.get('id')
-
-    if (!tableId) {
-      return NextResponse.json({
-        success: false,
-        error: '缺少表格ID'
+        error: '缺少必填参数：userId 和 id'
       }, { status: 400 })
     }
 
-    const body = await request.json()
-    const { action, fieldName, newFieldName } = body
+    // 验证UUID格式
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(userId) || !uuidRegex.test(id)) {
+      return NextResponse.json({
+        success: false,
+        error: 'userId 和 id 格式无效，必须是标准UUID格式'
+      }, { status: 400 })
+    }
 
     // 验证操作类型
     if (!['add', 'remove', 'rename'].includes(action)) {
@@ -53,8 +49,8 @@ export async function PUT(request: NextRequest) {
     }
 
     const updatedRecord = await customFieldStorage.updateTableFields(
-      tableId,
-      user.userId,
+      id,
+      userId,
       { action, fieldName, newFieldName }
     )
 

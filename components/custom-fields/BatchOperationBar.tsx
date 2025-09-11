@@ -9,7 +9,6 @@ import {
   useColorModeValue,
 } from '@chakra-ui/react'
 import {
-  RiEditLine,
   RiDeleteBinLine,
   RiDownloadLine,
   RiCloseLine,
@@ -17,7 +16,6 @@ import {
 
 interface BatchOperationBarProps {
   selectedCount: number
-  onBatchEdit: () => void
   onBatchDelete: () => void
   onExportSelected: () => void
   onClearSelection: () => void
@@ -26,7 +24,6 @@ interface BatchOperationBarProps {
 
 export function BatchOperationBar({
   selectedCount,
-  onBatchEdit,
   onBatchDelete,
   onExportSelected,
   onClearSelection,
@@ -74,17 +71,6 @@ export function BatchOperationBar({
 
           {/* 右侧操作按钮 */}
           <HStack spacing={2}>
-            <Button
-              size="sm"
-              leftIcon={<RiEditLine />}
-              onClick={onBatchEdit}
-              isDisabled={loading}
-              colorScheme="blue"
-              variant="outline"
-            >
-              批量编辑
-            </Button>
-            
             <Button
               size="sm"
               leftIcon={<RiDownloadLine />}
