@@ -264,14 +264,7 @@ export interface TableRow {
   [field: string]: any // 动态字段，如：标题、正文、分类等
 }
 
-// 旧版本字段定义（向后兼容）
-export interface LegacyCustomField {
-  key: string
-  label: string
-  value: string
-  type?: 'text'
-  required?: boolean
-}
+// 已移除旧版本字段定义，现在使用新的TableRow格式
 
 // 表格字段定义
 export interface TableField {
@@ -330,13 +323,7 @@ export interface FieldOperation {
 }
 
 
-// 向后兼容的输入类型
-export interface CustomFieldInput {
-  key: string
-  label: string
-  value: string
-  removable: boolean // 是否可删除 (标题不可删除)
-}
+// 已移除向后兼容的输入类型，现在使用TableRow格式
 
 export interface CustomFieldStats {
   洞察: number

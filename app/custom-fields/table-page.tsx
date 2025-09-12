@@ -49,12 +49,15 @@ import {
   RiFileTextLine,
   RiCloseLine,
   RiInformationLine,
+  RiUploadLine,
+  RiFileDownloadLine,
 } from 'react-icons/ri'
 import { PageLayout } from '@/components/layout/PageLayout'
 import { Card } from '@/components/ui/Card'
 import { DataTable } from '@/components/custom-fields/DataTable'
 import { TableToolbar } from '@/components/custom-fields/TableToolbar'
 import { BatchOperationBar } from '@/components/custom-fields/BatchOperationBar'
+import { ImportModal } from '@/components/custom-fields/ImportModal'
 import { 
   CustomFieldRecord, 
   CustomFieldForm, 
@@ -62,8 +65,9 @@ import {
   CustomFieldStats 
 } from '@/types'
 import { useTableCustomFields } from '@/hooks/useTableCustomFields'
+import { useAuth } from '@/hooks/useAuth'
 import { format } from 'date-fns'
-import { exportToExcel } from '@/lib/excel-utils'
+import { exportToExcel, downloadExcelTemplate, createTableFromImport } from '@/lib/excel-utils'
 
 const MotionBox = motion(Box)
 
@@ -94,6 +98,7 @@ export default function CustomFieldsTablePage() {
   // Modal states
   const { isOpen: isCreateTableOpen, onOpen: onCreateTableOpen, onClose: onCreateTableClose } = useDisclosure()
   const { isOpen: isDeleteTableOpen, onOpen: onDeleteTableOpen, onClose: onDeleteTableClose } = useDisclosure()
+  const { isOpen: isImportModalOpen, onOpen: onImportModalOpen, onClose: onImportModalClose } = useDisclosure()
   
   // Form states
   const [createTableForm, setCreateTableForm] = useState<CustomFieldForm & { type: string; tableName: string }>({
@@ -159,6 +164,7 @@ export default function CustomFieldsTablePage() {
   const selectedHoverBgColor = useColorModeValue('blue.100', 'blue.700')
 
   // 使用新的 hook
+  const { user } = useAuth()
   const {
     tables,
     currentTable: hookCurrentTable,
@@ -654,6 +660,22 @@ export default function CustomFieldsTablePage() {
     }
   }
   
+  // 取消所有未保存的修改
+  const handleCancelAllChanges = () => {
+    if (!hasUnsavedChanges()) return
+    
+    // 清空所有未保存的更改
+    clearPendingChanges()
+    
+    toast({
+      title: '已取消修改',
+      description: '所有未保存的更改已被取消',
+      status: 'info',
+      duration: 2000,
+      isClosable: true,
+    })
+  }
+  
   // Excel导出功能
   const handleExportExcel = async () => {
     if (!currentTable) {
@@ -803,6 +825,68 @@ export default function CustomFieldsTablePage() {
     }
   }
 
+  // 下载Excel导入模板
+  const handleDownloadTemplate = async () => {
+    try {
+      await downloadExcelTemplate(selectedType)
+      toast({
+        title: '模板下载成功',
+        description: `${selectedType}数据导入模板已下载`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+    } catch (error) {
+      console.error('模板下载失败:', error)
+      toast({
+        title: '模板下载失败',
+        description: error instanceof Error ? error.message : '未知错误',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    }
+  }
+
+  // 导入Excel数据
+  const handleImportData = async (importData: { fields: string[], data: any[], tableName: string }) => {
+    try {
+      if (!user?.id) {
+        throw new Error('用户未登录')
+      }
+
+      // 创建表格数据
+      const tableData = createTableFromImport(importData, selectedType, importData.tableName, user.id)
+      
+      // 调用创建表格API
+      const result = await hookCreateTable(tableData)
+      
+      if (result) {
+        toast({
+          title: '导入成功',
+          description: `成功导入 ${importData.data.length} 行${selectedType}数据`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        })
+        
+        // 刷新表格列表和统计
+        await fetchTables()
+        await fetchStats()
+      }
+    } catch (error) {
+      console.error('导入失败:', error)
+      toast({
+        title: '导入失败',
+        description: error instanceof Error ? error.message : '未知错误',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+      throw error // 重新抛出错误，让ImportModal处理
+    }
+  }
+
   return (
     <PageLayout>
       <Flex h="calc(100vh - 200px)" gap={6}>
@@ -823,7 +907,8 @@ export default function CustomFieldsTablePage() {
           <VStack spacing={2} align="stretch">
             {(['洞察', '钩子', '情绪'] as const).map((type) => {
               const Icon = TYPE_ICONS[type]
-              const isSelected = selectedType === type
+              const isCurrentType = selectedType === type
+              const isSelected = isCurrentType && !currentTable
               const count = stats[type]
               
               return (
@@ -837,10 +922,13 @@ export default function CustomFieldsTablePage() {
                     p={3}
                     borderRadius="lg"
                     cursor="pointer"
-                    bg={isSelected ? hoverBgColor : 'transparent'}
-                    border={isSelected ? '2px solid' : '2px solid transparent'}
-                    borderColor={isSelected ? TYPE_COLORS[type] : 'transparent'}
-                    onClick={() => setSelectedType(type)}
+                    bg={isSelected ? hoverBgColor : (isCurrentType ? bgColor : 'transparent')}
+                    border={isSelected ? '2px solid' : (isCurrentType ? '1px solid' : '2px solid transparent')}
+                    borderColor={isSelected ? TYPE_COLORS[type] : (isCurrentType ? borderColor : 'transparent')}
+                    onClick={() => {
+                      setSelectedType(type)
+                      setCurrentTable(null) // 点击类型时清空表格选择
+                    }}
                     _hover={{ bg: hoverBgColor }}
                   >
                     <Icon color={TYPE_COLORS[type]} />
@@ -932,7 +1020,7 @@ export default function CustomFieldsTablePage() {
               {/* 表格工具栏 */}
               <TableToolbar
                 onCreateTable={handleCreateTable}
-                onImportData={() => console.log('导入数据')}
+                onImportData={onImportModalOpen}
                 onExportExcel={handleExportExcel}
                 onRefresh={() => {
                   fetchTables()
@@ -948,6 +1036,11 @@ export default function CustomFieldsTablePage() {
                 }
                 onSaveAllChanges={saveAllChanges}
                 isSavingChanges={isSavingChanges}
+                onCancelChanges={handleCancelAllChanges}
+                onDownloadTemplate={handleDownloadTemplate}
+                currentType={selectedType}
+                showCreateButton={false}
+                showMoreActions={false}
               />
               
               {/* 未保存更改提示 */}
@@ -1024,14 +1117,31 @@ export default function CustomFieldsTablePage() {
                 <Text mt={4} color={mutedTextColor} textAlign="center">
                   请从左侧选择或创建一个{selectedType}表格
                 </Text>
-                <Button
-                  mt={4}
-                  leftIcon={<RiAddLine />}
-                  colorScheme="blue"
-                  onClick={handleCreateTable}
-                >
-                  创建新表格
-                </Button>
+                <HStack mt={4} spacing={4}>
+                  <Button
+                    leftIcon={<RiAddLine />}
+                    colorScheme="blue"
+                    onClick={handleCreateTable}
+                  >
+                    创建新表格
+                  </Button>
+                  <Button
+                    leftIcon={<RiUploadLine />}
+                    variant="outline"
+                    colorScheme="blue"
+                    onClick={onImportModalOpen}
+                  >
+                    导入{selectedType}数据
+                  </Button>
+                  <Button
+                    leftIcon={<RiFileDownloadLine />}
+                    variant="ghost"
+                    colorScheme="blue"
+                    onClick={handleDownloadTemplate}
+                  >
+                    下载模板
+                  </Button>
+                </HStack>
               </Flex>
             </Card>
           )}
@@ -1246,6 +1356,15 @@ export default function CustomFieldsTablePage() {
           </AlertDialogContent>
         </AlertDialogOverlay>
       </AlertDialog>
+
+      {/* 导入数据模态框 */}
+      <ImportModal
+        isOpen={isImportModalOpen}
+        onClose={onImportModalClose}
+        onImport={handleImportData}
+        type={selectedType}
+        loading={loading}
+      />
     </PageLayout>
   )
 }

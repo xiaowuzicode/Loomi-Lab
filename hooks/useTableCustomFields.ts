@@ -209,9 +209,12 @@ export function useTableCustomFields() {
         userId: user.id,
         createdUserId: user.id,
         ...formData,
-        extendedField: [
-          { key: 'title', label: '标题', value: '', required: true }
-        ]
+        // 如果没有提供 extendedField，创建默认的
+        extendedField: formData.extendedField.length > 0 ? formData.extendedField : [
+          { id: 1, '标题': '' }
+        ],
+        // 如果没有提供 tableFields，创建默认的
+        tableFields: formData.tableFields.length > 0 ? formData.tableFields : ['标题']
       }
 
       const response = await fetch('/api/custom-fields', {
