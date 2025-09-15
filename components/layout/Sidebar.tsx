@@ -28,6 +28,7 @@ import {
   RiMessageLine,
   RiLightbulbLine,
   RiDatabase2Line,
+  RiFileTextLine,
 } from 'react-icons/ri'
 
 // const Box = Box // 暂时移除动画
@@ -85,6 +86,12 @@ const getNavItems = (userCount: number): NavItem[] => [
     icon: RiBookOpenLine,
     badge: 'HOT',
     color: 'red.400',
+  },
+  {
+    label: '备忘录',
+    href: '/memo-folders',
+    icon: RiFileTextLine,
+    color: 'blue.300',
   },
   {
     label: '提示词管理',
