@@ -79,3 +79,62 @@ body {
     background-position: -200% 0;
   }
 }
+
+/* Markdown 渲染基础样式（用于 .markdown-body 容器） */
+.markdown-body {
+  line-height: 1.7;
+}
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  font-weight: 600;
+  line-height: 1.25;
+  margin-top: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+.markdown-body h1 { font-size: 1.75rem; }
+.markdown-body h2 { font-size: 1.5rem; }
+.markdown-body h3 { font-size: 1.25rem; }
+.markdown-body h4 { font-size: 1.125rem; }
+.markdown-body h5 { font-size: 1rem; }
+.markdown-body h6 { font-size: 0.875rem; }
+
+.markdown-body p { margin: 0.5rem 0; }
+.markdown-body ul, .markdown-body ol { margin: 0.5rem 0 0.75rem 1.25rem; }
+.markdown-body li { margin: 0.25rem 0; }
+
+.markdown-body code { 
+  background: rgba(255,255,255,0.06);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9em;
+}
+.markdown-body pre code {
+  display: block;
+  padding: 0.75rem;
+  overflow-x: auto;
+}
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0 1rem;
+}
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid rgba(255,255,255,0.15);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+.markdown-body thead th {
+  background: rgba(255,255,255,0.06);
+}
+.markdown-body blockquote {
+  margin: 0.75rem 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid rgba(255,255,255,0.2);
+  color: #a3a3a3;
+}

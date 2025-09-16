@@ -22,6 +22,9 @@ import { useEffect, useState } from 'react'
 import { PageLayout } from '@/components/layout/PageLayout'
 import { RiFolder2Line, RiStickyNoteLine } from 'react-icons/ri'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import type { PluggableList } from 'unified'
+const markdownPlugins: PluggableList = [remarkGfm]
 
 interface FolderNode {
   fold_id: string
@@ -305,7 +308,7 @@ export default function MemoFoldersPage() {
                     <Heading size="sm">{noteDetail.note_name || '(未命名)'}</Heading>
                     <Text fontSize="sm" color="gray.500">更新于 {new Date(noteDetail.updated_at).toLocaleString()}</Text>
                     <Box mt={2} className="markdown-body">
-                      <ReactMarkdown>{noteDetail.note || ''}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={markdownPlugins}>{noteDetail.note || ''}</ReactMarkdown>
                     </Box>
                   </VStack>
                 ) : (
