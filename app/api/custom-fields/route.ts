@@ -171,12 +171,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 验证类型
-    if (!['洞察', '钩子', '情绪'].includes(type)) {
+    if (!type || typeof type !== 'string' || !type.trim()) {
       return NextResponse.json({
         success: false,
-        error: '无效的类型'
+        error: '类型不能为空'
       }, { status: 400 })
     }
+    const normalizedType = type.trim()
 
     // 确保扩展字段为新格式并包含标题字段
     if (Array.isArray(extendedField) && extendedField.length > 0) {
@@ -207,7 +208,7 @@ export async function POST(request: NextRequest) {
       userId,
       createdUserId,
       appCode,
-      type,
+      type: normalizedType,
       tableName: tableName.trim(),
       extendedField,
       amount: amountInCents,

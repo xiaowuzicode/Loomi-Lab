@@ -23,7 +23,12 @@ interface TableCustomFieldListResponse {
   }
 }
 
-export function useTableCustomFields() {
+interface UseTableCustomFieldsOptions {
+  userIdOverride?: string
+  createdUserIdOverride?: string
+}
+
+export function useTableCustomFields(options: UseTableCustomFieldsOptions = {}) {
   const [tables, setTables] = useState<CustomFieldRecord[]>([])
   const [currentTable, setCurrentTable] = useState<CustomFieldRecord | null>(null)
   const [loading, setLoading] = useState(false)
@@ -38,11 +43,15 @@ export function useTableCustomFields() {
   })
   const toast = useToast()
   const { user, isAuthenticated } = useAuth()
+  const { userIdOverride, createdUserIdOverride } = options
+
+  const resolvedUserId = userIdOverride ?? (isAuthenticated ? user?.id ?? null : user?.id ?? null)
+  const resolvedCreatedUserId = createdUserIdOverride ?? resolvedUserId
 
   // 获取表格列表
   const fetchTables = useCallback(async (params: CustomFieldListParams = {}) => {
-    if (!isAuthenticated || !user?.id) {
-      setError('用户未登录或用户信息不完整')
+    if (!resolvedUserId) {
+      setError('缺少用户ID，无法加载表格')
       setLoading(false)
       return {
         records: [],
@@ -60,7 +69,7 @@ export function useTableCustomFields() {
 
     try {
       const searchParams = new URLSearchParams({
-        userId: user.id,
+        userId: resolvedUserId,
         action: 'list',
         page: String(params.page || 1),
         limit: String(params.limit || 10),
@@ -113,11 +122,11 @@ export function useTableCustomFields() {
     } finally {
       setLoading(false)
     }
-  }, [toast, isAuthenticated, user])
+  }, [toast, resolvedUserId])
 
   // 获取统计信息
   const fetchStats = useCallback(async () => {
-    if (!isAuthenticated || !user?.id) {
+    if (!resolvedUserId) {
       setStatsLoading(false)
       return {
         洞察: 0,
@@ -130,7 +139,7 @@ export function useTableCustomFields() {
     setStatsLoading(true)
     try {
       const searchParams = new URLSearchParams({
-        userId: user.id,
+        userId: resolvedUserId,
         action: 'stats'
       })
 
@@ -157,11 +166,11 @@ export function useTableCustomFields() {
     } finally {
       setStatsLoading(false)
     }
-  }, [isAuthenticated, user])
+  }, [resolvedUserId])
 
   // 获取单个表格详情
   const fetchTableById = useCallback(async (id: string): Promise<CustomFieldRecord | null> => {
-    if (!isAuthenticated || !user?.id) {
+    if (!resolvedUserId) {
       setTableLoading(false)
       return null
     }
@@ -169,7 +178,7 @@ export function useTableCustomFields() {
     setTableLoading(true)
     try {
       const searchParams = new URLSearchParams({
-        userId: user.id,
+        userId: resolvedUserId,
         id: id
       })
 
@@ -195,19 +204,19 @@ export function useTableCustomFields() {
     } finally {
       setTableLoading(false)
     }
-  }, [toast, isAuthenticated, user])
+  }, [toast, resolvedUserId])
 
   // 创建新表格
   const createTable = useCallback(async (formData: CustomFieldForm & { type: string }): Promise<CustomFieldRecord | null> => {
-    if (!isAuthenticated || !user?.id) {
-      throw new Error('用户未登录或用户信息不完整')
+    if (!resolvedUserId || !resolvedCreatedUserId) {
+      throw new Error('缺少用户信息，无法创建表格')
     }
 
     try {
       // 转换数据格式以匹配后端API期望的格式
       const transformedData = {
-        userId: user.id,
-        createdUserId: user.id,
+        userId: resolvedUserId,
+        createdUserId: resolvedCreatedUserId,
         ...formData,
         // 如果没有提供 extendedField，创建默认的
         extendedField: formData.extendedField.length > 0 ? formData.extendedField : [
@@ -248,20 +257,20 @@ export function useTableCustomFields() {
       })
       return null
     }
-  }, [toast, isAuthenticated, user])
+  }, [toast, resolvedUserId, resolvedCreatedUserId])
 
   // 字段操作
   const updateTableFields = useCallback(async (
     tableId: string, 
     operation: FieldOperation
   ): Promise<CustomFieldRecord | null> => {
-    if (!isAuthenticated || !user?.id) {
-      throw new Error('用户未登录或用户信息不完整')
+    if (!resolvedUserId) {
+      throw new Error('缺少用户信息，无法操作字段')
     }
 
     try {
       const requestData = {
-        userId: user.id,
+        userId: resolvedUserId,
         id: tableId,
         ...operation
       }
@@ -305,7 +314,7 @@ export function useTableCustomFields() {
       })
       return null
     }
-  }, [currentTable, toast, isAuthenticated, user])
+  }, [currentTable, toast, resolvedUserId])
 
   // 行操作
   const updateTableRow = useCallback(async (
@@ -314,14 +323,14 @@ export function useTableCustomFields() {
     rowId?: number,
     rowData?: Record<string, any>
   ): Promise<CustomFieldRecord | null> => {
-    if (!isAuthenticated || !user?.id) {
-      throw new Error('用户未登录或用户信息不完整')
+    if (!resolvedUserId) {
+      throw new Error('缺少用户信息，无法操作行数据')
     }
 
     try {
       let method: string
       let body: any = { 
-        userId: user.id,
+        userId: resolvedUserId,
         id: tableId,
         action, 
         rowData,
@@ -378,18 +387,18 @@ export function useTableCustomFields() {
       })
       return null
     }
-  }, [currentTable, toast, isAuthenticated, user])
+  }, [currentTable, toast, resolvedUserId])
 
 
   // 删除表格
   const deleteTable = useCallback(async (id: string): Promise<boolean> => {
-    if (!isAuthenticated || !user?.id) {
-      throw new Error('用户未登录或用户信息不完整')
+    if (!resolvedUserId) {
+      throw new Error('缺少用户信息，无法删除表格')
     }
 
     try {
       const requestData = {
-        userId: user.id,
+        userId: resolvedUserId,
         id: id
       }
 
@@ -428,7 +437,7 @@ export function useTableCustomFields() {
       })
       return false
     }
-  }, [currentTable, toast, isAuthenticated, user])
+  }, [currentTable, toast, resolvedUserId])
 
   // 单行字段更新（用于行内编辑）
   const updateCellValue = useCallback(async (
@@ -450,7 +459,8 @@ export function useTableCustomFields() {
     statsLoading,
     error,
     stats,
-    
+    effectiveUserId: resolvedUserId,
+
     // 表格操作
     fetchTables,
     fetchStats,

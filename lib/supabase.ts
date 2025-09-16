@@ -1005,6 +1005,34 @@ export class CustomFieldStorage {
     }
   }
 
+  async getTypeSummary(userId: string) {
+    try {
+      if (!userId) throw new Error('缺少用户ID')
+
+      const { data, error } = await this.supabase
+        .from('book_user_custom_fields')
+        .select('type')
+        .eq('is_deleted', false)
+        .eq('user_id', userId)
+
+      if (error) throw error
+
+      const typeCountMap = new Map<string, number>()
+      ;(data || []).forEach((record: { type: string | null }) => {
+        const typeName = record.type || '未分类'
+        typeCountMap.set(typeName, (typeCountMap.get(typeName) || 0) + 1)
+      })
+
+      return Array.from(typeCountMap.entries()).map(([name, count]) => ({
+        name,
+        tableCount: count,
+      }))
+    } catch (error) {
+      console.error('获取类型列表失败:', error)
+      return []
+    }
+  }
+
   /**
    * 转换自定义字段数据格式
    */

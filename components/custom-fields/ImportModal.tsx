@@ -49,7 +49,7 @@ interface ImportModalProps {
   isOpen: boolean
   onClose: () => void
   onImport: (data: { fields: string[], data: any[], tableName: string }) => Promise<void>
-  type: '洞察' | '钩子' | '情绪'
+  type: string
   loading?: boolean
 }
 
@@ -174,12 +174,17 @@ export function ImportModal({
     onClose()
   }
 
+  const normalizedType = type?.trim()
+  const typeLabel = normalizedType && normalizedType !== '数据' ? normalizedType : ''
+  const modalTitle = typeLabel ? `导入${typeLabel}数据` : '导入数据'
+  const tablePlaceholder = typeLabel ? `请输入${typeLabel}表格名称` : '请输入表格名称'
+
   return (
     <Modal isOpen={isOpen} onClose={handleClose} size="xl">
       <ModalOverlay />
       <ModalContent>
         <ModalHeader>
-          导入{type}数据
+          {modalTitle}
         </ModalHeader>
         <ModalCloseButton />
         
@@ -241,7 +246,7 @@ export function ImportModal({
               <Input
                 value={tableName}
                 onChange={(e) => setTableName(e.target.value)}
-                placeholder={`请输入${type}表格名称`}
+                placeholder={tablePlaceholder}
               />
             </FormControl>
 
@@ -261,10 +266,7 @@ export function ImportModal({
                       {parseResult.fields.map((field, index) => (
                         <ListItem key={index} fontSize="sm">
                           <ListIcon as={RiCheckLine} color="green.500" />
-                          {field}
-                          {field === '标题' && (
-                            <Badge ml={2} colorScheme="orange" size="sm">必需</Badge>
-                          )}
+                      {field}
                         </ListItem>
                       ))}
                     </List>
@@ -288,10 +290,7 @@ export function ImportModal({
                                 <Th fontSize="xs" py={2}>行号</Th>
                                 {parseResult.fields.map(field => (
                                   <Th key={field} fontSize="xs" py={2} maxW="120px">
-                                    {field}
-                                    {field === '标题' && (
-                                      <Badge ml={1} colorScheme="orange" size="sm">必需</Badge>
-                                    )}
+                                {field}
                                   </Th>
                                 ))}
                               </Tr>
@@ -356,7 +355,7 @@ export function ImportModal({
               </HStack>
               <List spacing={1} fontSize="sm" color={infoTextColor}>
                 <ListItem>• Excel文件第一行必须是字段名（表头）</ListItem>
-                <ListItem>• 必须包含"标题"字段</ListItem>
+                <ListItem>• 建议包含"标题"字段（缺失时系统会自动补充空列）</ListItem>
                 <ListItem>• 序号将自动生成，无需在Excel中包含</ListItem>
                 <ListItem>• 空行将被自动跳过</ListItem>
                 <ListItem>• 支持 .xlsx 和 .xls 格式</ListItem>

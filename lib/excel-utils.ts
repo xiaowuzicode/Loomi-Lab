@@ -172,7 +172,7 @@ export const exportMultipleTablesToExcel = async (
 /**
  * 下载Excel导入模板
  */
-export const downloadExcelTemplate = async (type: '洞察' | '钩子' | '情绪') => {
+export const downloadExcelTemplate = async (type: string) => {
   try {
     const XLSX = await import('xlsx')
     
@@ -297,7 +297,7 @@ export const parseExcelFile = async (file: File): Promise<{
  */
 export const createTableFromImport = (
   importData: { fields: string[], data: any[] },
-  type: '洞察' | '钩子' | '情绪',
+  type: string,
   tableName: string,
   userId: string
 ) => {

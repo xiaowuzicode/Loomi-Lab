@@ -107,10 +107,16 @@ const getNavItems = (userCount: number): NavItem[] => [
     color: 'cyan.400',
   },
   {
-    label: '自定义字段管理',
-    href: '/custom-fields',
+    label: '自定义库',
+    href: '/custom-library',
     icon: RiDatabase2Line,
     color: 'teal.400',
+  },
+  {
+    label: '创建公域表',
+    href: '/custom-library/public',
+    icon: RiDatabase2Line,
+    color: 'cyan.400',
   },
   {
     label: '用户消息查询',

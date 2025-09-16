@@ -284,7 +284,7 @@ export interface CustomFieldRecord {
   createdUserId: string
   createdUserName: string // 创建者显示名称
   appCode: string
-  type: '洞察' | '钩子' | '情绪'
+  type: string
   tableName: string // 表名
   extendedField: TableRow[] // 改为表格行数据数组
   tableFields: string[] // 表格字段名列表（用于表头生成）
@@ -325,19 +325,14 @@ export interface FieldOperation {
 
 // 已移除向后兼容的输入类型，现在使用TableRow格式
 
-export interface CustomFieldStats {
-  洞察: number
-  钩子: number
-  情绪: number
-  总计: number
-}
+export type CustomFieldStats = Record<string, number>
 
 export interface CustomFieldListParams {
   page?: number
   limit?: number
   search?: string
   userSearch?: string
-  type?: '洞察' | '钩子' | '情绪' | 'all'
+  type?: string
   appCode?: string
   amountMin?: number
   amountMax?: number

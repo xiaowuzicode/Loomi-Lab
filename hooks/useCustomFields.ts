@@ -31,15 +31,41 @@ export function useCustomFields() {
     情绪: 0,
     总计: 0
   })
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const toast = useToast()
 
   // 获取自定义字段列表
-  const fetchCustomFields = useCallback(async (params: CustomFieldListParams = {}) => {
+  const fetchCustomFields = useCallback(async (
+    targetUserId: string,
+    params: CustomFieldListParams = {}
+  ) => {
+    if (!targetUserId) {
+      const errorMessage = '缺少用户ID'
+      setError(errorMessage)
+      toast({
+        title: '错误',
+        description: errorMessage,
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return {
+        records: [],
+        pagination: {
+          page: 1,
+          limit: 10,
+          total: 0,
+          totalPages: 0
+        }
+      }
+    }
+
     setLoading(true)
     setError(null)
 
     try {
       const searchParams = new URLSearchParams({
+        userId: targetUserId,
         action: 'list',
         page: String(params.page || 1),
         limit: String(params.limit || 10),
@@ -75,6 +101,7 @@ export function useCustomFields() {
 
       if (result.success && result.data) {
         setRecords(result.data)
+        setCurrentUserId(targetUserId)
         return {
           records: result.data,
           pagination: (result as any).pagination
@@ -107,7 +134,16 @@ export function useCustomFields() {
   }, [toast])
 
   // 获取统计信息
-  const fetchStats = useCallback(async () => {
+  const fetchStats = useCallback(async (targetUserId?: string) => {
+    const userIdToUse = targetUserId || currentUserId
+    if (!userIdToUse) {
+      return {
+        洞察: 0,
+        钩子: 0,
+        情绪: 0,
+        总计: 0
+      }
+    }
     setStatsLoading(true)
     try {
       const token = localStorage.getItem('auth_token')
@@ -118,7 +154,12 @@ export function useCustomFields() {
         headers['Authorization'] = `Bearer ${token}`
       }
 
-      const response = await fetch('/api/custom-fields?action=stats', {
+      const searchParams = new URLSearchParams({
+        action: 'stats',
+        userId: userIdToUse
+      })
+
+      const response = await fetch(`/api/custom-fields?${searchParams}`, {
         headers
       })
       const result: ApiResponse<CustomFieldStats> = await response.json()
@@ -150,11 +191,14 @@ export function useCustomFields() {
     } finally {
       setStatsLoading(false)
     }
-  }, [toast])
+  }, [toast, currentUserId])
 
 
   // 根据ID获取单条记录
-  const fetchCustomFieldById = useCallback(async (id: string): Promise<CustomFieldRecord | null> => {
+  const fetchCustomFieldById = useCallback(async (
+    id: string,
+    targetUserId?: string
+  ): Promise<CustomFieldRecord | null> => {
     try {
       const token = localStorage.getItem('auth_token')
       const headers: HeadersInit = {
@@ -164,7 +208,13 @@ export function useCustomFields() {
         headers['Authorization'] = `Bearer ${token}`
       }
 
-      const response = await fetch(`/api/custom-fields?id=${id}`, {
+      const userIdToUse = targetUserId || currentUserId
+      if (!userIdToUse) {
+        throw new Error('缺少用户ID')
+      }
+
+      const searchParams = new URLSearchParams({ id, userId: userIdToUse })
+      const response = await fetch(`/api/custom-fields?${searchParams.toString()}`, {
         headers
       })
       const result: ApiResponse<CustomFieldRecord> = await response.json()
@@ -185,7 +235,7 @@ export function useCustomFields() {
       })
       return null
     }
-  }, [toast])
+  }, [toast, currentUserId])
 
   // 创建自定义字段记录
   const createCustomField = useCallback(async (formData: CustomFieldForm & { type: string }): Promise<CustomFieldRecord | null> => {
@@ -337,6 +387,7 @@ export function useCustomFields() {
     statsLoading,
     error,
     stats,
+    currentUserId,
     fetchCustomFields,
     fetchStats,
     fetchCustomFieldById,
