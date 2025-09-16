@@ -40,6 +40,8 @@ interface NoteListItem {
   updated_at: string
 }
 
+const FOLDER_TYPE = 'memo'
+
 export default function MemoFoldersPage() {
   const toast = useToast()
   const [userId, setUserId] = useState('')
@@ -62,7 +64,7 @@ export default function MemoFoldersPage() {
     if (!userId) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/memo-folders?userId=${encodeURIComponent(userId)}`)
+      const res = await fetch(`/api/memo-folders?userId=${encodeURIComponent(userId)}&type=${encodeURIComponent(FOLDER_TYPE)}`)
       const data = await res.json()
       if (data.success) {
         setFolders(data.data?.folders || [])
