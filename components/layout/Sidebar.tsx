@@ -29,6 +29,7 @@ import {
   RiLightbulbLine,
   RiDatabase2Line,
   RiFileTextLine,
+  RiGalleryLine,
 } from 'react-icons/ri'
 
 // const Box = Box // 暂时移除动画
@@ -92,6 +93,12 @@ const getNavItems = (userCount: number): NavItem[] => [
     href: '/memo-folders',
     icon: RiFileTextLine,
     color: 'blue.300',
+  },
+  {
+    label: '帖子库',
+    href: '/posts-library',
+    icon: RiGalleryLine,
+    color: 'purple.300',
   },
   {
     label: '提示词管理',
