@@ -256,23 +256,38 @@ export interface SystemConfig {
   updatedAt: Date
 }
 
-// 自定义字段管理相关类型
-export interface CustomField {
-  key: string
-  label: string
-  value: string // 目前统一为字符串类型
-  type?: 'text' // 目前只支持文本类型
-  required?: boolean
+// 自定义字段管理相关类型 - 表格化改造后
+
+// 表格行数据类型
+export interface TableRow {
+  id: number // 行ID，自增
+  [field: string]: any // 动态字段，如：标题、正文、分类等
 }
 
+// 已移除旧版本字段定义，现在使用新的TableRow格式
+
+// 表格字段定义
+export interface TableField {
+  name: string // 字段名称
+  label: string // 显示标签
+  type: 'text' | 'textarea' | 'number' // 字段类型
+  required: boolean // 是否必填
+  sortable: boolean // 是否可排序
+  deletable: boolean // 是否可删除
+  width?: number // 列宽
+}
+
+// 更新后的自定义字段记录
 export interface CustomFieldRecord {
   id: string
   userId: string
   createdUserId: string
   createdUserName: string // 创建者显示名称
   appCode: string
-  type: '洞察' | '钩子' | '情绪'
-  extendedField: CustomField[]
+  type: string
+  tableName: string // 表名
+  extendedField: TableRow[] // 改为表格行数据数组
+  tableFields: string[] // 表格字段名列表（用于表头生成）
   amount: number // 前端显示的实际金额 (元)
   postIds: string[]
   visibility: boolean
@@ -291,29 +306,33 @@ export interface CustomFieldForm {
   exampleData?: string
   visibility: boolean
   isPublic: boolean
-  extendedField: CustomField[]
+  extendedField: TableRow[]
+  tableFields: string[]
 }
 
-export interface CustomFieldInput {
-  key: string
-  label: string
-  value: string
-  removable: boolean // 是否可删除 (标题不可删除)
+// 表格操作相关类型
+export interface TableRowUpdate {
+  rowId: number
+  updates: Record<string, any>
 }
 
-export interface CustomFieldStats {
-  洞察: number
-  钩子: number
-  情绪: number
-  总计: number
+export interface FieldOperation {
+  action: 'add' | 'remove' | 'rename'
+  fieldName: string
+  newFieldName?: string
 }
+
+
+// 已移除向后兼容的输入类型，现在使用TableRow格式
+
+export type CustomFieldStats = Record<string, number>
 
 export interface CustomFieldListParams {
   page?: number
   limit?: number
   search?: string
   userSearch?: string
-  type?: '洞察' | '钩子' | '情绪' | 'all'
+  type?: string
   appCode?: string
   amountMin?: number
   amountMax?: number

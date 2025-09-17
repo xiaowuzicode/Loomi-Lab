@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     if (adminPassword && email === adminUsername) {
       if (verifyPlainPassword(password, adminPassword)) {
         const authUser = {
-          id: 'admin-001',
+          id: '00000000-0000-4000-8000-000000000001',
           email: 'admin@loomi.com',
           username: '管理员',
           role: 'admin'

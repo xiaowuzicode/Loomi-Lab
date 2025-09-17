@@ -813,6 +813,7 @@ export class CustomFieldStorage {
     createdUserId: string
     appCode: string
     type: string
+    tableName: string
     extendedField: any[]
     amount: number
     readme: string
@@ -828,6 +829,7 @@ export class CustomFieldStorage {
           created_user_id: record.createdUserId,
           app_code: record.appCode,
           type: record.type,
+          table_name: record.tableName,
           extended_field: record.extendedField,
           amount: record.amount, // 前端已转换为分
           readme: record.readme,
@@ -940,7 +942,7 @@ export class CustomFieldStorage {
       if (error) throw error
 
       // 去重并排序
-      const uniqueAppCodes = [...new Set((data || []).map(record => record.app_code))]
+      const uniqueAppCodes = Array.from(new Set((data || []).map(record => record.app_code)))
         .filter(code => code && code.trim() !== '')
         .sort()
 
@@ -1003,13 +1005,41 @@ export class CustomFieldStorage {
     }
   }
 
+  async getTypeSummary(userId: string) {
+    try {
+      if (!userId) throw new Error('缺少用户ID')
+
+      const { data, error } = await this.supabase
+        .from('book_user_custom_fields')
+        .select('type')
+        .eq('is_deleted', false)
+        .eq('user_id', userId)
+
+      if (error) throw error
+
+      const typeCountMap = new Map<string, number>()
+      ;(data || []).forEach((record: { type: string | null }) => {
+        const typeName = record.type || '未分类'
+        typeCountMap.set(typeName, (typeCountMap.get(typeName) || 0) + 1)
+      })
+
+      return Array.from(typeCountMap.entries()).map(([name, count]) => ({
+        name,
+        tableCount: count,
+      }))
+    } catch (error) {
+      console.error('获取类型列表失败:', error)
+      return []
+    }
+  }
+
   /**
    * 转换自定义字段数据格式
    */
   private async transformCustomFieldData(record: any) {
     // 对于自定义字段系统：管理员UUID显示为管理员，其他用户查询真实姓名
     let createdUserName: string
-    if (record.created_user_id === '00000000-0000-0000-0000-000000000001') {
+    if (record.created_user_id === '00000000-0000-4000-8000-000000000001') {
       createdUserName = '管理员'
     } else {
       try {
@@ -1020,6 +1050,28 @@ export class CustomFieldStorage {
       }
     }
 
+    let extendedField = record.extended_field || []
+    let tableFields: string[] = []
+
+    if (Array.isArray(extendedField) && extendedField.length > 0) {
+      const firstItem = extendedField[0]
+      if (firstItem && 'id' in firstItem) {
+        tableFields = Object.keys(firstItem).filter(key => key !== 'id')
+        // 确保标题字段在首位
+        if (tableFields.includes('标题')) {
+          tableFields = ['标题', ...tableFields.filter(field => field !== '标题')]
+        }
+      }
+    }
+
+    // 如果没有字段定义，设置默认字段
+    if (tableFields.length === 0) {
+      tableFields = ['标题', '正文']
+      if (extendedField.length === 0) {
+        extendedField = [{ id: 1, 标题: '', 正文: '' }]
+      }
+    }
+
     return {
       id: record.id,
       userId: record.user_id,
@@ -1027,7 +1079,9 @@ export class CustomFieldStorage {
       createdUserName,
       appCode: record.app_code,
       type: record.type,
-      extendedField: record.extended_field || [],
+      tableName: record.table_name || '未命名表格', // 表名字段
+      extendedField, // 新格式：TableRow[]
+      tableFields,   // 新字段：字段名列表
       amount: record.amount / 100, // 转换为元
       postIds: record.post_ids || [],
       visibility: record.visibility,
@@ -1039,6 +1093,159 @@ export class CustomFieldStorage {
       updatedAt: record.updated_at
     }
   }
+
+  /**
+   * 字段操作：添加、删除、重命名字段
+   */
+  async updateTableFields(
+    id: string, 
+    userId: string, 
+    operation: { action: 'add' | 'remove' | 'rename', fieldName: string, newFieldName?: string }
+  ) {
+    try {
+      // 先获取当前数据
+      const currentRecord = await this.getCustomFieldById(id, userId)
+      if (!currentRecord) {
+        throw new Error('记录不存在')
+      }
+
+      let updatedData = [...currentRecord.extendedField]
+      let updatedFields = [...currentRecord.tableFields]
+
+      switch (operation.action) {
+        case 'add':
+          if (!updatedFields.includes(operation.fieldName)) {
+            updatedFields.push(operation.fieldName)
+            updatedData = updatedData.map(row => ({
+              ...row,
+              [operation.fieldName]: ''
+            }))
+          }
+          break
+
+        case 'remove':
+          if (operation.fieldName !== '标题') { // 保护标题字段
+            updatedFields = updatedFields.filter(field => field !== operation.fieldName)
+            updatedData = updatedData.map(row => {
+              const { [operation.fieldName]: removed, ...rest } = row
+              return rest
+            })
+          }
+          break
+
+        case 'rename':
+          if (operation.newFieldName && operation.fieldName !== '标题') {
+            const fieldIndex = updatedFields.indexOf(operation.fieldName)
+            if (fieldIndex !== -1 && !updatedFields.includes(operation.newFieldName)) {
+              updatedFields[fieldIndex] = operation.newFieldName
+              updatedData = updatedData.map(row => {
+                const { [operation.fieldName]: value, ...rest } = row as any
+                return { ...rest, [operation.newFieldName!]: value }
+              })
+            }
+          }
+          break
+      }
+
+      // 更新数据库
+      const { data, error } = await this.supabase
+        .from('book_user_custom_fields')
+        .update({
+          extended_field: updatedData,
+          // table_fields: updatedFields, // 该字段在数据库中不存在，暂时移除
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .eq('is_deleted', false)
+        .select()
+        .single()
+
+      if (error) throw error
+      return await this.transformCustomFieldData(data)
+    } catch (error) {
+      console.error('字段操作失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 行操作：添加、更新、删除行数据
+   */
+  async updateTableRow(
+    id: string,
+    userId: string,
+    operation: { 
+      action: 'add' | 'update' | 'delete' | 'duplicate',
+      rowId?: number,
+      rowData?: Record<string, any>
+    }
+  ) {
+    try {
+      const currentRecord = await this.getCustomFieldById(id, userId)
+      if (!currentRecord) {
+        throw new Error('记录不存在')
+      }
+
+      let updatedData = [...currentRecord.extendedField]
+
+      switch (operation.action) {
+        case 'add':
+          const maxId = Math.max(0, ...updatedData.map(row => row.id || 0))
+          const newRow: { id: number; [key: string]: any } = { id: maxId + 1 }
+          // 为每个字段初始化空值
+          currentRecord.tableFields.forEach(field => {
+            newRow[field] = operation.rowData?.[field] || ''
+          })
+          updatedData.push(newRow)
+          break
+
+        case 'update':
+          if (operation.rowId && operation.rowData) {
+            updatedData = updatedData.map(row =>
+              row.id === operation.rowId 
+                ? { ...row, ...operation.rowData }
+                : row
+            )
+          }
+          break
+
+        case 'delete':
+          if (operation.rowId) {
+            updatedData = updatedData.filter(row => row.id !== operation.rowId)
+          }
+          break
+
+        case 'duplicate':
+          if (operation.rowId) {
+            const sourceRow = updatedData.find(row => row.id === operation.rowId)
+            if (sourceRow) {
+              const maxId = Math.max(0, ...updatedData.map(row => row.id || 0))
+              updatedData.push({ ...sourceRow, id: maxId + 1 })
+            }
+          }
+          break
+      }
+
+      // 更新数据库
+      const { data, error } = await this.supabase
+        .from('book_user_custom_fields')
+        .update({
+          extended_field: updatedData,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .eq('is_deleted', false)
+        .select()
+        .single()
+
+      if (error) throw error
+      return await this.transformCustomFieldData(data)
+    } catch (error) {
+      console.error('行操作失败:', error)
+      throw error
+    }
+  }
+
 }
 
 // 创建全局实例
