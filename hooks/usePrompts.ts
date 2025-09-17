@@ -3,7 +3,7 @@ import { AgentInfo, PromptDirectory, AgentUpdate, BatchUpdateRequest, PromptMana
 
 export function usePrompts() {
   const [state, setState] = useState<PromptManagerState>({
-    directoryPath: '/Users/jiawei/project/blueplan-research/prompts/loomi',
+    directoryPath: '/root/blueprojecttest/blueplan-research/prompts/loomi',
     agents: [],
     localEdits: {},
     loading: false,

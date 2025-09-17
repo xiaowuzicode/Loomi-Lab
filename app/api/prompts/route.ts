@@ -181,7 +181,7 @@ async function updateAgentPrompt(dirPath: string, agentId: string, newPrompt: st
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const directoryPath = searchParams.get('path') || '/Users/jiawei/project/blueplan-research/prompts/loomi'
+    const directoryPath = searchParams.get('path') || '/root/blueprojecttest/blueplan-research/prompts/loomi'
     const agentId = searchParams.get('agentId')
     
     if (agentId) {
