@@ -264,14 +264,7 @@ export interface TableRow {
   [field: string]: any // 动态字段，如：标题、正文、分类等
 }
 
-// 旧版本字段定义（向后兼容）
-export interface LegacyCustomField {
-  key: string
-  label: string
-  value: string
-  type?: 'text'
-  required?: boolean
-}
+// 已移除旧版本字段定义，现在使用新的TableRow格式
 
 // 表格字段定义
 export interface TableField {
@@ -291,7 +284,7 @@ export interface CustomFieldRecord {
   createdUserId: string
   createdUserName: string // 创建者显示名称
   appCode: string
-  type: '洞察' | '钩子' | '情绪'
+  type: string
   tableName: string // 表名
   extendedField: TableRow[] // 改为表格行数据数组
   tableFields: string[] // 表格字段名列表（用于表头生成）
@@ -330,27 +323,16 @@ export interface FieldOperation {
 }
 
 
-// 向后兼容的输入类型
-export interface CustomFieldInput {
-  key: string
-  label: string
-  value: string
-  removable: boolean // 是否可删除 (标题不可删除)
-}
+// 已移除向后兼容的输入类型，现在使用TableRow格式
 
-export interface CustomFieldStats {
-  洞察: number
-  钩子: number
-  情绪: number
-  总计: number
-}
+export type CustomFieldStats = Record<string, number>
 
 export interface CustomFieldListParams {
   page?: number
   limit?: number
   search?: string
   userSearch?: string
-  type?: '洞察' | '钩子' | '情绪' | 'all'
+  type?: string
   appCode?: string
   amountMin?: number
   amountMax?: number

@@ -24,6 +24,8 @@ import {
   RiSearchLine,
   RiRefreshLine,
   RiCheckLine,
+  RiCloseLine,
+  RiFileDownloadLine,
 } from 'react-icons/ri'
 import { useState } from 'react'
 
@@ -40,6 +42,16 @@ interface TableToolbarProps {
   unsavedChangesCount?: number
   onSaveAllChanges?: () => void
   isSavingChanges?: boolean
+  // 取消修改相关
+  onCancelChanges?: () => void
+  // 模板下载相关
+  onDownloadTemplate?: () => void
+  currentType?: '洞察' | '钩子' | '情绪'
+  // 显示控制
+  showCreateButton?: boolean
+  showMoreActions?: boolean
+  // 关闭当前表格
+  onCloseTable?: () => void
 }
 
 export function TableToolbar({
@@ -54,6 +66,12 @@ export function TableToolbar({
   unsavedChangesCount = 0,
   onSaveAllChanges,
   isSavingChanges = false,
+  onCancelChanges,
+  onDownloadTemplate,
+  currentType,
+  showCreateButton = true,
+  showMoreActions = true,
+  onCloseTable,
 }: TableToolbarProps) {
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -73,14 +91,26 @@ export function TableToolbar({
     <HStack spacing={4} mb={4} justify="space-between" flexWrap="wrap">
       {/* 左侧操作按钮 */}
       <HStack spacing={3}>
-        <Button
-          leftIcon={<RiAddLine />}
-          colorScheme="blue"
-          onClick={onCreateTable}
-          size="sm"
-        >
-          新建表
-        </Button>
+        {onCloseTable && (
+          <Button
+            leftIcon={<RiCloseLine />}
+            variant="outline"
+            onClick={onCloseTable}
+            size="sm"
+          >
+            关闭
+          </Button>
+        )}
+        {showCreateButton && (
+          <Button
+            leftIcon={<RiAddLine />}
+            colorScheme="blue"
+            onClick={onCreateTable}
+            size="sm"
+          >
+            新建表
+          </Button>
+        )}
         
         {/* 统一保存按钮 */}
         {hasUnsavedChanges && (
@@ -96,24 +126,45 @@ export function TableToolbar({
           </Button>
         )}
         
-        <Menu>
-          <MenuButton
-            as={Button}
-            rightIcon={<RiMoreLine />}
+        {/* 取消修改按钮 */}
+        {hasUnsavedChanges && (
+          <Button
+            leftIcon={<RiCloseLine />}
+            colorScheme="gray"
             variant="outline"
+            onClick={onCancelChanges}
             size="sm"
+            isDisabled={isSavingChanges}
           >
-            更多操作
-          </MenuButton>
-          <MenuList>
-            <MenuItem icon={<RiUploadLine />} onClick={onImportData}>
-              导入数据
-            </MenuItem>
-            <MenuItem icon={<RiFileExcelLine />} onClick={onExportExcel}>
-              导出为Excel
-            </MenuItem>
-          </MenuList>
-        </Menu>
+            取消修改
+          </Button>
+        )}
+        
+        {showMoreActions && (
+          <Menu>
+            <MenuButton
+              as={Button}
+              rightIcon={<RiMoreLine />}
+              variant="outline"
+              size="sm"
+            >
+              更多操作
+            </MenuButton>
+            <MenuList>
+              <MenuItem icon={<RiUploadLine />} onClick={onImportData}>
+                导入Excel数据
+              </MenuItem>
+              <MenuItem icon={<RiFileExcelLine />} onClick={onExportExcel}>
+                导出为Excel
+              </MenuItem>
+              {onDownloadTemplate && (
+                <MenuItem icon={<RiFileDownloadLine />} onClick={onDownloadTemplate}>
+                  下载模板
+                </MenuItem>
+              )}
+            </MenuList>
+          </Menu>
+        )}
       </HStack>
 
       {/* 右侧搜索和刷新 */}

@@ -8,8 +8,8 @@ export default function CustomFieldsPage() {
   const router = useRouter()
   
   useEffect(() => {
-    // 重定向到表格化页面
-    router.replace('/custom-fields/table')
+    // 重定向到新的自定义库页面
+    router.replace('/custom-library')
   }, [router])
   
   // 显示加载状态

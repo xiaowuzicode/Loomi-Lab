@@ -8,7 +8,6 @@ import {
   HStack,
   Button,
   IconButton,
-  Badge,
   useColorModeValue,
   useToast,
   useDisclosure,
@@ -24,6 +23,7 @@ import {
   FormControl,
   FormLabel,
   Input,
+  Select,
   Textarea,
   Switch,
   Grid,
@@ -37,24 +37,28 @@ import {
   AlertDialogFooter,
   Skeleton,
   Icon,
+  Tag,
+  TagLabel,
+  TagCloseButton,
+  Wrap,
+  WrapItem,
 } from '@chakra-ui/react'
-import { motion } from 'framer-motion'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
-  RiBrainLine,
-  RiHeart3Line,
-  RiSparklingFill,
   RiAddLine,
   RiDeleteBinLine,
   RiFileTextLine,
   RiCloseLine,
   RiInformationLine,
+  RiUploadLine,
+  RiFileDownloadLine,
 } from 'react-icons/ri'
 import { PageLayout } from '@/components/layout/PageLayout'
 import { Card } from '@/components/ui/Card'
 import { DataTable } from '@/components/custom-fields/DataTable'
 import { TableToolbar } from '@/components/custom-fields/TableToolbar'
 import { BatchOperationBar } from '@/components/custom-fields/BatchOperationBar'
+import { ImportModal } from '@/components/custom-fields/ImportModal'
 import { 
   CustomFieldRecord, 
   CustomFieldForm, 
@@ -63,26 +67,31 @@ import {
 } from '@/types'
 import { useTableCustomFields } from '@/hooks/useTableCustomFields'
 import { format } from 'date-fns'
-import { exportToExcel } from '@/lib/excel-utils'
+import { exportToExcel, downloadExcelTemplate, createTableFromImport } from '@/lib/excel-utils'
+import { PUBLIC_USER_ID } from '@/lib/constants'
 
-const MotionBox = motion(Box)
+const DEFAULT_TYPES: string[] = ['全部']
 
-// 类型图标映射
-const TYPE_ICONS = {
-  '洞察': RiBrainLine,
-  '钩子': RiHeart3Line,
-  '情绪': RiSparklingFill,
+interface CustomFieldsTablePageProps {
+  userIdOverride?: string
+  createdUserIdOverride?: string
+  presetTypes?: string[]
+  initialType?: string
+  hideLayout?: boolean
 }
 
-// 类型颜色映射
-const TYPE_COLORS = {
-  '洞察': 'blue.400',
-  '钩子': 'pink.400',
-  '情绪': 'purple.400',
-}
+export default function CustomFieldsTablePage({
+  userIdOverride,
+  createdUserIdOverride,
+  presetTypes,
+  initialType,
+  hideLayout = false,
+}: CustomFieldsTablePageProps = {}) {
+  const initialTypeOptions = presetTypes && presetTypes.length > 0 ? presetTypes : Array.from(new Set(['全部', ...(DEFAULT_TYPES || [])]))
+  const defaultType = initialType || initialTypeOptions[0] || ''
 
-export default function CustomFieldsTablePage() {
-  const [selectedType, setSelectedType] = useState<'洞察' | '钩子' | '情绪'>('洞察')
+  const [typeOptions, setTypeOptions] = useState<string[]>(initialTypeOptions)
+  const [selectedType, setSelectedType] = useState<string>(defaultType)
   const [currentTable, setCurrentTable] = useState<CustomFieldRecord | null>(null)
   const [selectedRows, setSelectedRows] = useState<number[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -94,11 +103,12 @@ export default function CustomFieldsTablePage() {
   // Modal states
   const { isOpen: isCreateTableOpen, onOpen: onCreateTableOpen, onClose: onCreateTableClose } = useDisclosure()
   const { isOpen: isDeleteTableOpen, onOpen: onDeleteTableOpen, onClose: onDeleteTableClose } = useDisclosure()
+  const { isOpen: isImportModalOpen, onOpen: onImportModalOpen, onClose: onImportModalClose } = useDisclosure()
   
   // Form states
   const [createTableForm, setCreateTableForm] = useState<CustomFieldForm & { type: string; tableName: string }>({
     appCode: 'loomi',
-    type: '洞察',
+    type: defaultType === '全部' ? '' : defaultType,
     tableName: '', // 表名字段，必填
     amount: 0,
     readme: '',
@@ -109,6 +119,8 @@ export default function CustomFieldsTablePage() {
     tableFields: [] // 由后端自动生成
   })
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+  const [isCreatingTable, setIsCreatingTable] = useState(false)
+  const [newFieldName, setNewFieldName] = useState('')
   const [pendingDeleteTable, setPendingDeleteTable] = useState<CustomFieldRecord | null>(null)
   
   // 新行管理状态
@@ -147,6 +159,16 @@ export default function CustomFieldsTablePage() {
   const cancelRef = useRef<HTMLButtonElement>(null)
   const toast = useToast()
 
+  const isPublicScope = userIdOverride === PUBLIC_USER_ID
+  const [typeSummary, setTypeSummary] = useState<{ name: string; tableCount: number }[]>([])
+  const [loadingTypes, setLoadingTypes] = useState(false)
+  const activeTypeName = selectedType && selectedType !== '全部' ? selectedType : ''
+
+  type ToolbarType = '洞察' | '钩子' | '情绪'
+  const toToolbarType = (t: string): ToolbarType | undefined => (
+    t === '洞察' || t === '钩子' || t === '情绪' ? t : undefined
+  )
+
   // 颜色主题
   const bgColor = useColorModeValue('white', 'gray.800')
   const borderColor = useColorModeValue('gray.200', 'gray.600')
@@ -164,9 +186,7 @@ export default function CustomFieldsTablePage() {
     currentTable: hookCurrentTable,
     loading,
     tableLoading,
-    statsLoading,
     error,
-    stats,
     fetchTables: hookFetchTables,
     fetchStats,
     fetchTableById,
@@ -176,20 +196,73 @@ export default function CustomFieldsTablePage() {
     updateTableFields,
     updateTableRow,
     updateCellValue,
-  } = useTableCustomFields()
+    effectiveUserId,
+  } = useTableCustomFields({
+    userIdOverride,
+    createdUserIdOverride,
+  })
 
   const fetchTables = useCallback(async () => {
+    const typeFilter = !selectedType || selectedType === '全部' ? 'all' : selectedType
     await hookFetchTables({
-      type: selectedType,
+      type: typeFilter,
       page: 1,
       limit: 50
     })
   }, [hookFetchTables, selectedType])
 
+  const fetchTypeSummary = useCallback(async () => {
+    if (!effectiveUserId) return
+    setLoadingTypes(true)
+    try {
+      const searchParams = new URLSearchParams({
+        scope: isPublicScope ? 'public' : 'user',
+        userId: effectiveUserId,
+      })
+      const response = await fetch(`/api/custom-fields/types?${searchParams.toString()}`)
+      const result = await response.json()
+      if (result.success && Array.isArray(result.data)) {
+        setTypeSummary(result.data)
+        const names = result.data.map((item: { name: string }) => item.name)
+        const merged = names.length > 0 ? ['全部', ...names] : ['全部']
+        setTypeOptions(merged)
+      }
+    } catch (error) {
+      console.error('获取类型列表失败:', error)
+    } finally {
+      setLoadingTypes(false)
+    }
+  }, [effectiveUserId, isPublicScope])
+
+  const getTypeCount = useCallback((type: string) => {
+    if (type === '全部') {
+      return typeSummary.reduce((sum, item) => sum + (item.tableCount || 0), 0)
+    }
+    const item = typeSummary.find(summary => summary.name === type)
+    return item?.tableCount ?? 0
+  }, [typeSummary])
+
+  useEffect(() => {
+    if (typeOptions.length === 0) {
+      setSelectedType('')
+      return
+    }
+
+    if (!selectedType) {
+      setSelectedType(typeOptions[0])
+      return
+    }
+
+    if (!typeOptions.includes(selectedType)) {
+      setSelectedType(typeOptions[0])
+    }
+  }, [typeOptions, selectedType])
+
   useEffect(() => {
     fetchTables()
     fetchStats()
-  }, [fetchTables, fetchStats])
+    fetchTypeSummary()
+  }, [fetchTables, fetchStats, fetchTypeSummary])
 
   // 同步hook中的currentTable到本地状态
   useEffect(() => {
@@ -202,19 +275,35 @@ export default function CustomFieldsTablePage() {
   const handleCreateTable = () => {
     setCreateTableForm({
       appCode: 'loomi',
-      type: selectedType,
+      type: activeTypeName || '',
       tableName: '', // 初始化表名字段
       amount: 0,
       readme: '',
       exampleData: '',
       visibility: true,
       isPublic: false,
-      extendedField: [], // 由后端自动创建标题字段
-      tableFields: [] // 由后端自动生成
+      extendedField: [],
+      tableFields: []
     })
     setFormErrors({})
     onCreateTableOpen()
   }
+  // 创建弹窗内添加/移除字段
+  const handleAddInitField = () => {
+    const name = newFieldName.trim()
+    if (!name) return
+    if (createTableForm.tableFields.includes(name)) {
+      toast({ title: '字段名已存在', status: 'error', duration: 2000, isClosable: true })
+      return
+    }
+    setCreateTableForm(prev => ({ ...prev, tableFields: [...prev.tableFields, name] }))
+    setNewFieldName('')
+  }
+
+  const handleRemoveInitField = (name: string) => {
+    setCreateTableForm(prev => ({ ...prev, tableFields: prev.tableFields.filter(f => f !== name) }))
+  }
+
 
   const handleTableSelect = (table: CustomFieldRecord) => {
     setCurrentTable(table)
@@ -531,6 +620,7 @@ export default function CustomFieldsTablePage() {
         // 刷新表格列表和统计数据
         await fetchTables()
         await fetchStats()
+        await fetchTypeSummary()
       }
     } catch (error) {
       console.error('删除表格失败:', error)
@@ -654,6 +744,22 @@ export default function CustomFieldsTablePage() {
     }
   }
   
+  // 取消所有未保存的修改
+  const handleCancelAllChanges = () => {
+    if (!hasUnsavedChanges()) return
+    
+    // 清空所有未保存的更改
+    clearPendingChanges()
+    
+    toast({
+      title: '已取消修改',
+      description: '所有未保存的更改已被取消',
+      status: 'info',
+      duration: 2000,
+      isClosable: true,
+    })
+  }
+  
   // Excel导出功能
   const handleExportExcel = async () => {
     if (!currentTable) {
@@ -767,44 +873,139 @@ export default function CustomFieldsTablePage() {
   // 表单验证
   const validateCreateTableForm = (): boolean => {
     const errors: Record<string, string> = {}
-
-    if (!createTableForm.tableName.trim()) {
-      errors.tableName = '表名是必填的'
-    } else if (createTableForm.tableName.trim().length < 2) {
-      errors.tableName = '表名至少需要2个字符'
-    }
-
-    if (!createTableForm.readme.trim() || createTableForm.readme.trim().length < 10) {
-      errors.readme = '说明文档至少需要10个字符'
-    }
-
+    // 放宽校验：仅做基本的数值下限校验
     if (createTableForm.amount < 0) {
       errors.amount = '金额不能为负数'
     }
-
+    if (!createTableForm.tableFields || createTableForm.tableFields.length === 0) {
+      errors.tableFields = '请至少添加一个字段'
+    }
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
 
   const handleCreateTableSubmit = async () => {
+    if (isCreatingTable) return
     if (!validateCreateTableForm()) {
       return
     }
 
     try {
-      const result = await hookCreateTable(createTableForm)
+      setIsCreatingTable(true)
+      // 创建一个空白初始行用于持久化字段定义
+      const initialRow: any = { id: 1 }
+      createTableForm.tableFields.forEach(field => { initialRow[field] = '' })
+      const result = await hookCreateTable({
+        ...createTableForm,
+        type: createTableForm.type.trim(),
+        extendedField: [initialRow]
+      })
       if (result) {
         onCreateTableClose()
         fetchTables()
         fetchStats()
+        fetchTypeSummary()
       }
     } catch (error) {
       console.error('创建表格失败:', error)
+    } finally {
+      setIsCreatingTable(false)
     }
   }
 
-  return (
-    <PageLayout>
+  // 下载Excel导入模板
+  const handleDownloadTemplate = async () => {
+    try {
+      const templateType = activeTypeName || '自定义'
+      await downloadExcelTemplate(templateType)
+      toast({
+        title: '模板下载成功',
+        description: `${templateType}数据导入模板已下载`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+    } catch (error) {
+      console.error('模板下载失败:', error)
+      toast({
+        title: '模板下载失败',
+        description: error instanceof Error ? error.message : '未知错误',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    }
+  }
+
+  // 导入Excel数据
+  const handleImportData = async (importData: { fields: string[], data: any[], tableName: string, type?: string, readme?: string, exampleData?: string, visibility?: boolean, isPublic?: boolean, appCode?: string, amount?: number }) => {
+    try {
+      if (!effectiveUserId) {
+        throw new Error('缺少用户信息')
+      }
+
+      const hasTitleField = importData.fields.some(field => field === '标题')
+      const normalizedFields = hasTitleField
+        ? importData.fields
+        : ['标题', ...importData.fields]
+
+      const normalizedData = importData.data.map(row => {
+        if (hasTitleField) return row
+        return {
+          标题: '',
+          ...row,
+        }
+      })
+
+      const importType = (importData.type && importData.type.trim()) || activeTypeName || '未分类'
+
+      // 创建表格数据
+      const tableData = createTableFromImport(
+        { fields: normalizedFields, data: normalizedData },
+        importType,
+        importData.tableName,
+        effectiveUserId
+      )
+      // 覆盖额外参数
+      tableData.readme = importData.readme || tableData.readme
+      tableData.exampleData = importData.exampleData || tableData.exampleData
+      tableData.visibility = importData.visibility ?? tableData.visibility
+      tableData.isPublic = importData.isPublic ?? tableData.isPublic
+      tableData.appCode = importData.appCode || tableData.appCode
+      tableData.amount = (importData.amount !== undefined ? importData.amount : tableData.amount)
+      
+      // 调用创建表格API
+      const result = await hookCreateTable(tableData)
+      
+      if (result) {
+        toast({
+          title: '导入成功',
+          description: `成功导入 ${importData.data.length} 行${importType}数据`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        })
+        
+        // 刷新表格列表和统计
+        await fetchTables()
+        await fetchStats()
+        fetchTypeSummary()
+      }
+    } catch (error) {
+      console.error('导入失败:', error)
+      toast({
+        title: '导入失败',
+        description: error instanceof Error ? error.message : '未知错误',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+      throw error // 重新抛出错误，让ImportModal处理
+    }
+  }
+
+  const content = (
+    <>
       <Flex h="calc(100vh - 200px)" gap={6}>
         {/* 左侧分类导航 */}
         <Box
@@ -820,51 +1021,43 @@ export default function CustomFieldsTablePage() {
             📁 数据表管理
           </Text>
           
-          <VStack spacing={2} align="stretch">
-            {(['洞察', '钩子', '情绪'] as const).map((type) => {
-              const Icon = TYPE_ICONS[type]
-              const isSelected = selectedType === type
-              const count = stats[type]
-              
-              return (
-                <MotionBox
-                  key={type}
-                  whileHover={{ x: 4 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <Flex
-                    align="center"
-                    p={3}
-                    borderRadius="lg"
-                    cursor="pointer"
-                    bg={isSelected ? hoverBgColor : 'transparent'}
-                    border={isSelected ? '2px solid' : '2px solid transparent'}
-                    borderColor={isSelected ? TYPE_COLORS[type] : 'transparent'}
-                    onClick={() => setSelectedType(type)}
-                    _hover={{ bg: hoverBgColor }}
-                  >
-                    <Icon color={TYPE_COLORS[type]} />
-                    <Text ml={3} fontWeight={isSelected ? 'semibold' : 'normal'}>
-                      {type}
-                    </Text>
-                    <Badge
-                      ml="auto"
-                      colorScheme={isSelected ? 'blue' : 'gray'}
-                      variant={isSelected ? 'solid' : 'subtle'}
-                    >
-                      {statsLoading ? '...' : count}
-                    </Badge>
-                  </Flex>
-                </MotionBox>
-              )
-            })}
-          </VStack>
+          {loadingTypes ? (
+            <Skeleton height="44px" borderRadius="lg" />
+          ) : (
+            <FormControl>
+              <FormLabel fontSize="sm" color={mutedTextColor}>
+                类型筛选
+              </FormLabel>
+              <Select
+                value={selectedType}
+                onChange={(event) => {
+                  const value = event.target.value || '全部'
+                  setSelectedType(value)
+                  setCurrentTable(null)
+                }}
+              >
+                {typeOptions.map((type) => (
+                  <option key={type} value={type}>
+                    {type === '全部'
+                      ? `全部（${getTypeCount('全部')}）`
+                      : `${type}（${getTypeCount(type)}）`}
+                  </option>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+
+          <Text mt={4} fontSize="sm" color={mutedTextColor}>
+            {selectedType === '全部'
+              ? `共 ${getTypeCount('全部')} 张表`
+              : `${selectedType} 共 ${getTypeCount(selectedType)} 张表`}
+          </Text>
 
           {/* 表格列表 */}
           <Box mt={6}>
             <HStack justify="space-between" align="center" mb={3}>
               <Text fontWeight="semibold" color={textColor}>
-                {selectedType}类型表格
+                {activeTypeName ? `${activeTypeName}类型表格` : '全部表格'}
               </Text>
             </HStack>
             <VStack spacing={2} align="stretch">
@@ -874,7 +1067,7 @@ export default function CustomFieldsTablePage() {
                 ))
               ) : tables.length === 0 ? (
                 <Text color={mutedTextColor} textAlign="center" py={4} fontSize="sm">
-                  暂无{selectedType}表格
+                  暂无{activeTypeName ? `${activeTypeName}表格` : '表格'}
                 </Text>
               ) : (
                 tables.map((table) => (
@@ -932,7 +1125,7 @@ export default function CustomFieldsTablePage() {
               {/* 表格工具栏 */}
               <TableToolbar
                 onCreateTable={handleCreateTable}
-                onImportData={() => console.log('导入数据')}
+                onImportData={onImportModalOpen}
                 onExportExcel={handleExportExcel}
                 onRefresh={() => {
                   fetchTables()
@@ -948,6 +1141,15 @@ export default function CustomFieldsTablePage() {
                 }
                 onSaveAllChanges={saveAllChanges}
                 isSavingChanges={isSavingChanges}
+                onCancelChanges={handleCancelAllChanges}
+                onDownloadTemplate={handleDownloadTemplate}
+                currentType={toToolbarType(activeTypeName)}
+                onCloseTable={() => {
+                  setCurrentTable(null)
+                  setSelectedRows([])
+                }}
+                showCreateButton={false}
+                showMoreActions={false}
               />
               
               {/* 未保存更改提示 */}
@@ -1022,16 +1224,33 @@ export default function CustomFieldsTablePage() {
               <Flex direction="column" align="center" justify="center" py={12}>
                 <RiFileTextLine size="48px" color="gray.400" />
                 <Text mt={4} color={mutedTextColor} textAlign="center">
-                  请从左侧选择或创建一个{selectedType}表格
+                  请从左侧选择或创建一个表格
                 </Text>
-                <Button
-                  mt={4}
-                  leftIcon={<RiAddLine />}
-                  colorScheme="blue"
-                  onClick={handleCreateTable}
-                >
-                  创建新表格
-                </Button>
+                <HStack mt={4} spacing={4}>
+                  <Button
+                    leftIcon={<RiAddLine />}
+                    colorScheme="blue"
+                    onClick={handleCreateTable}
+                  >
+                    创建新表格
+                  </Button>
+                  <Button
+                    leftIcon={<RiUploadLine />}
+                    variant="outline"
+                    colorScheme="blue"
+                    onClick={onImportModalOpen}
+                  >
+                    {activeTypeName ? `导入${activeTypeName}数据` : '导入数据'}
+                  </Button>
+                  <Button
+                    leftIcon={<RiFileDownloadLine />}
+                    variant="ghost"
+                    colorScheme="blue"
+                    onClick={handleDownloadTemplate}
+                  >
+                    {activeTypeName ? `下载${activeTypeName}模板` : '下载模板'}
+                  </Button>
+                </HStack>
               </Flex>
             </Card>
           )}
@@ -1056,6 +1275,58 @@ export default function CustomFieldsTablePage() {
                   placeholder="请输入表格名称"
                 />
                 <FormErrorMessage>{formErrors.tableName}</FormErrorMessage>
+              </FormControl>
+
+              <FormControl isInvalid={!!formErrors.type} isRequired>
+                <FormLabel>类型</FormLabel>
+                <Select
+                  placeholder="选择常用类型"
+                  value={createTableForm.type && typeOptions.includes(createTableForm.type) ? createTableForm.type : ''}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    if (!value) {
+                      setCreateTableForm(prev => ({ ...prev, type: '' }))
+                      return
+                    }
+                    setCreateTableForm(prev => ({ ...prev, type: value }))
+                  }}
+                >
+                  {typeOptions.filter(type => type !== '全部').map((type) => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </Select>
+                <Input
+                  mt={3}
+                  value={createTableForm.type}
+                  placeholder="或直接输入新的类型"
+                  onChange={(event) => setCreateTableForm(prev => ({ ...prev, type: event.target.value }))}
+                />
+                <FormErrorMessage>{formErrors.type}</FormErrorMessage>
+              </FormControl>
+              
+              {/* 初始字段配置 */}
+              <FormControl isInvalid={!!formErrors.tableFields} isRequired>
+                <FormLabel>字段列表</FormLabel>
+                <HStack>
+                  <Input
+                    placeholder="输入字段名后回车添加"
+                    value={newFieldName}
+                    onChange={(e) => setNewFieldName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleAddInitField() }}
+                  />
+                  <Button onClick={handleAddInitField} variant="outline">添加字段</Button>
+                </HStack>
+                <Wrap mt={2} spacing={2}>
+                  {createTableForm.tableFields.map(field => (
+                    <WrapItem key={field}>
+                      <Tag size="md" colorScheme="blue" borderRadius="full">
+                        <TagLabel>{field}</TagLabel>
+                        <TagCloseButton onClick={() => handleRemoveInitField(field)} />
+                      </Tag>
+                    </WrapItem>
+                  ))}
+                </Wrap>
+                <FormErrorMessage>{formErrors.tableFields}</FormErrorMessage>
               </FormControl>
               
               <FormControl isInvalid={!!formErrors.readme} isRequired>
@@ -1126,7 +1397,7 @@ export default function CustomFieldsTablePage() {
             <Button variant="ghost" mr={3} onClick={onCreateTableClose}>
               取消
             </Button>
-            <Button colorScheme="blue" onClick={handleCreateTableSubmit}>
+            <Button colorScheme="blue" onClick={handleCreateTableSubmit} isLoading={isCreatingTable} loadingText="创建中...">
               创建表格
             </Button>
           </ModalFooter>
@@ -1246,6 +1517,25 @@ export default function CustomFieldsTablePage() {
           </AlertDialogContent>
         </AlertDialogOverlay>
       </AlertDialog>
+
+      {/* 导入数据模态框 */}
+      <ImportModal
+        isOpen={isImportModalOpen}
+        onClose={onImportModalClose}
+        onImport={handleImportData}
+        type={activeTypeName || '数据'}
+        loading={loading}
+      />
+    </>
+  )
+
+  if (hideLayout) {
+    return content
+  }
+
+  return (
+    <PageLayout>
+      {content}
     </PageLayout>
   )
 }

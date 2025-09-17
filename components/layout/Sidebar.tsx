@@ -28,6 +28,8 @@ import {
   RiMessageLine,
   RiLightbulbLine,
   RiDatabase2Line,
+  RiFileTextLine,
+  RiGalleryLine,
 } from 'react-icons/ri'
 
 // const Box = Box // 暂时移除动画
@@ -87,16 +89,34 @@ const getNavItems = (userCount: number): NavItem[] => [
     color: 'red.400',
   },
   {
+    label: '备忘录',
+    href: '/memo-folders',
+    icon: RiFileTextLine,
+    color: 'blue.300',
+  },
+  {
+    label: '帖子库',
+    href: '/posts-library',
+    icon: RiGalleryLine,
+    color: 'purple.300',
+  },
+  {
     label: '提示词管理',
     href: '/prompts',
     icon: RiQuillPenLine,
     color: 'cyan.400',
   },
   {
-    label: '自定义字段管理',
-    href: '/custom-fields',
+    label: '自定义库',
+    href: '/custom-library',
     icon: RiDatabase2Line,
     color: 'teal.400',
+  },
+  {
+    label: '创建公域表',
+    href: '/custom-library/public',
+    icon: RiDatabase2Line,
+    color: 'cyan.400',
   },
   {
     label: '用户消息查询',

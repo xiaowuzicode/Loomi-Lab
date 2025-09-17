@@ -1,0 +1,23 @@
+[
+    {
+        "fold_id": "c6a9a6c2-4a11-4d3e-8c4d-2a1b7e6c9b3a",
+        "fold_name": "一级目录1",
+        "children": [
+            {
+                "fold_id": "8f3b2e5a-7c1d-4b8f-9e3a-6c1d8f3b2e5a",
+                "fold_name": "二级目录1",
+                "children": []
+            },
+            {
+                "fold_id": "1a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d",
+                "fold_name": "二级目录2",
+                "children": []
+            }
+        ]
+    },
+    {
+        "fold_id": "d9e8f7a6-5b4c-4d3e-8f2a-1b0c9d8e7f6a",
+        "fold_name": "一级目录2",
+        "children": []
+    }
+]

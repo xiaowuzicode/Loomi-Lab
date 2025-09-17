@@ -32,11 +32,8 @@ export const exportToExcel = async (
     }
 
     // 准备Excel数据
-    const excelData: ExcelData[] = dataToExport.map((row, index) => {
+    const excelData: ExcelData[] = dataToExport.map((row) => {
       const excelRow: ExcelData = {}
-      
-      // 添加序号
-      excelRow['序号'] = index + 1
       
       // 添加所有字段数据
       tableData.tableFields.forEach(field => {
@@ -53,12 +50,9 @@ export const exportToExcel = async (
     const worksheet = XLSX.utils.json_to_sheet(excelData)
     
     // 设置列宽
-    const columnWidths = [
-      { wpx: 60 },  // 序号列
-      ...tableData.tableFields.map(field => ({
-        wpx: field === '标题' ? 200 : field === '正文' ? 300 : 120
-      }))
-    ]
+    const columnWidths = tableData.tableFields.map(field => ({
+      wpx: field === '标题' ? 200 : field === '正文' ? 300 : 120
+    }))
     worksheet['!cols'] = columnWidths
 
     // 添加工作表到工作簿
@@ -126,9 +120,8 @@ export const exportMultipleTablesToExcel = async (
       }
 
       // 准备数据
-      const excelData: ExcelData[] = table.extendedField.map((row, index) => {
+      const excelData: ExcelData[] = table.extendedField.map((row) => {
         const excelRow: ExcelData = {}
-        excelRow['序号'] = index + 1
         
         table.tableFields.forEach(field => {
           excelRow[field] = row[field] || ''
@@ -141,12 +134,9 @@ export const exportMultipleTablesToExcel = async (
       const worksheet = XLSX.utils.json_to_sheet(excelData)
       
       // 设置列宽
-      const columnWidths = [
-        { wpx: 60 },  // 序号列
-        ...table.tableFields.map(field => ({
-          wpx: field === '标题' ? 200 : field === '正文' ? 300 : 120
-        }))
-      ]
+      const columnWidths = table.tableFields.map(field => ({
+        wpx: field === '标题' ? 200 : field === '正文' ? 300 : 120
+      }))
       worksheet['!cols'] = columnWidths
 
       // 工作表名称（限制长度，避免Excel限制）
@@ -176,5 +166,150 @@ export const exportMultipleTablesToExcel = async (
   } catch (error) {
     console.error('批量Excel导出失败:', error)
     throw new Error(error instanceof Error ? error.message : '批量导出失败')
+  }
+}
+
+/**
+ * 下载Excel导入模板
+ */
+export const downloadExcelTemplate = async (type: string) => {
+  try {
+    const XLSX = await import('xlsx')
+    
+    // 默认字段（基础模板，可为空/自由填）
+    const defaultFields = ['列1', '列2', '列3']
+    
+    // 创建模板数据（示例行）
+    const templateData = [
+      { 列1: '', 列2: '', 列3: '' },
+      { 列1: '', 列2: '', 列3: '' }
+    ]
+    
+    // 创建工作簿
+    const workbook = XLSX.utils.book_new()
+    
+    // 创建工作表
+    const worksheet = XLSX.utils.json_to_sheet(templateData)
+    
+    // 设置列宽
+    const columnWidths = defaultFields.map(() => ({ wpx: 120 }))
+    worksheet['!cols'] = columnWidths
+    
+    // 添加工作表
+    XLSX.utils.book_append_sheet(workbook, worksheet, `数据模板`)
+    
+    // 下载文件
+    const fileName = `数据导入模板_${new Date().toISOString().split('T')[0]}.xlsx`
+    XLSX.writeFile(workbook, fileName)
+    
+    return {
+      success: true,
+      fileName
+    }
+  } catch (error) {
+    console.error('模板下载失败:', error)
+    throw new Error(error instanceof Error ? error.message : '模板下载失败')
+  }
+}
+
+/**
+ * 解析Excel文件并返回数据
+ */
+export const parseExcelFile = async (file: File): Promise<{
+  fields: string[]
+  data: any[]
+  rowCount: number
+}> => {
+  try {
+    const XLSX = await import('xlsx')
+    
+    // 读取文件
+    const arrayBuffer = await file.arrayBuffer()
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' })
+    
+    // 获取第一个工作表
+    const firstSheetName = workbook.SheetNames[0]
+    if (!firstSheetName) {
+      throw new Error('Excel文件中没有找到工作表')
+    }
+    
+    const worksheet = workbook.Sheets[firstSheetName]
+    
+    // 转换为JSON数据
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+    
+    if (!jsonData || jsonData.length === 0) {
+      throw new Error('Excel文件中没有数据')
+    }
+    
+    // 第一行作为字段名（允许为空）。如为空，则根据数据行推导列数并生成占位列名
+    let fields = (jsonData[0] as string[]).filter(field => field && String(field).trim())
+    
+    if (fields.length === 0) {
+      // 统计数据行的最大列数
+      const dataRowsForInfer = jsonData.slice(1) as any[][]
+      const maxCols = dataRowsForInfer.reduce((m, row) => Math.max(m, Array.isArray(row) ? row.length : 0), 0)
+      fields = Array.from({ length: maxCols }, (_, i) => `列${i + 1}`)
+    }
+    
+    // 处理数据行
+    const dataRows = jsonData.slice(1).filter(row => {
+      // 过滤空行
+      return Array.isArray(row) && row.some(cell => cell !== undefined && cell !== null && cell !== '')
+    })
+    
+    // 转换为对象格式
+    const data = dataRows.map(row => {
+      const rowData: any = {}
+      fields.forEach((field, index) => {
+        rowData[field] = (row as any[])[index] || ''
+      })
+      return rowData
+    })
+    
+    return {
+      fields,
+      data,
+      rowCount: data.length
+    }
+  } catch (error) {
+    console.error('Excel解析失败:', error)
+    throw new Error(error instanceof Error ? error.message : 'Excel解析失败')
+  }
+}
+
+/**
+ * 创建导入数据的表格记录
+ */
+export const createTableFromImport = (
+  importData: { fields: string[], data: any[] },
+  type: string,
+  tableName: string,
+  userId: string
+) => {
+  // 使用导入文件的字段顺序；如导入为空数组，生成默认字段
+  const fields = importData.fields && importData.fields.length > 0
+    ? [...importData.fields]
+    : ['列1', '列2']
+  
+  // 转换数据格式，添加自动生成的ID
+  const extendedField = importData.data.map((row, index) => ({
+    id: index + 1,
+    ...row
+  }))
+  
+  return {
+    userId,
+    createdUserId: userId,
+    appCode: 'loomi',
+    type,
+    tableName,
+    amount: 0,
+    readme: `从Excel导入的数据表`,
+    exampleData: '',
+    visibility: true,
+    isPublic: false,
+    extendedField,
+    tableFields: fields
   }
 }

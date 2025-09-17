@@ -129,13 +129,13 @@ export async function POST(request: NextRequest) {
       appCode,
       type,
       tableName,
-      extendedField,
       amount,
       readme,
       exampleData,
       visibility = true,
       isPublic = false
     } = body
+    let extendedField = body.extendedField
 
     // 验证必填参数
     if (!userId || !createdUserId) {
@@ -171,19 +171,28 @@ export async function POST(request: NextRequest) {
     }
 
     // 验证类型
-    if (!['洞察', '钩子', '情绪'].includes(type)) {
+    if (!type || typeof type !== 'string' || !type.trim()) {
       return NextResponse.json({
         success: false,
-        error: '无效的类型'
+        error: '类型不能为空'
       }, { status: 400 })
     }
+    const normalizedType = type.trim()
 
-    // 确保扩展字段包含标题字段
-    let titleField = extendedField.find((field: any) => field.key === 'title' || field.label === '标题')
-    if (!titleField) {
-      // 如果没有标题字段，自动添加（但值为空）
-      titleField = { key: 'title', label: '标题', value: '', required: true }
-      extendedField.unshift(titleField) // 添加到开头
+    // 确保扩展字段为新格式并包含标题字段
+    if (Array.isArray(extendedField) && extendedField.length > 0) {
+      const firstRow = extendedField[0]
+      if (!firstRow || !('标题' in firstRow)) {
+        // 如果没有标题字段，为所有行添加标题字段
+        extendedField.forEach((row: any) => {
+          if (!row['标题']) {
+            row['标题'] = ''
+          }
+        })
+      }
+    } else {
+      // 如果扩展字段为空，创建默认行
+      extendedField = [{ id: 1, 标题: '' }]
     }
 
     // 验证金额
@@ -199,7 +208,7 @@ export async function POST(request: NextRequest) {
       userId,
       createdUserId,
       appCode,
-      type,
+      type: normalizedType,
       tableName: tableName.trim(),
       extendedField,
       amount: amountInCents,
@@ -231,13 +240,13 @@ export async function PUT(request: NextRequest) {
       userId,
       id,
       appCode,
-      extendedField,
       amount,
       readme,
       exampleData,
       visibility,
       isPublic
     } = body
+    let extendedField = body.extendedField
 
     // 验证必填参数
     if (!userId || !id) {
@@ -261,12 +270,20 @@ export async function PUT(request: NextRequest) {
     // 只更新提供的字段
     if (appCode !== undefined) updates.appCode = appCode
     if (extendedField !== undefined) {
-      // 确保扩展字段包含标题字段
-      let titleField = extendedField.find((field: any) => field.key === 'title' || field.label === '标题')
-      if (!titleField) {
-        // 如果没有标题字段，自动添加（但值为空）
-        titleField = { key: 'title', label: '标题', value: '', required: true }
-        extendedField.unshift(titleField) // 添加到开头
+      // 确保扩展字段为新格式并包含标题字段
+      if (Array.isArray(extendedField) && extendedField.length > 0) {
+        const firstRow = extendedField[0]
+        if (!firstRow || !('标题' in firstRow)) {
+          // 如果没有标题字段，为所有行添加标题字段
+          extendedField.forEach((row: any) => {
+            if (!row['标题']) {
+              row['标题'] = ''
+            }
+          })
+        }
+      } else if (Array.isArray(extendedField) && extendedField.length === 0) {
+        // 如果扩展字段为空数组，创建默认行
+        extendedField = [{ id: 1, 标题: '' }]
       }
       updates.extendedField = extendedField
     }

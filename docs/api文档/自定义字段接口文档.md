@@ -192,7 +192,7 @@ interface TableRow {
   "type": "洞察",
   "tableName": "新建表格",
   "extendedField": [
-    {"key": "title", "label": "标题", "value": "", "required": true}
+    {"id": 1, "标题": ""}
   ],
   "amount": 0,
   "readme": "表格描述信息",
