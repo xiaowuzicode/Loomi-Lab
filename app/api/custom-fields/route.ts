@@ -129,6 +129,7 @@ export async function POST(request: NextRequest) {
       appCode,
       type,
       tableName,
+      brandName,
       amount,
       readme,
       exampleData,
@@ -210,6 +211,7 @@ export async function POST(request: NextRequest) {
       appCode,
       type: normalizedType,
       tableName: tableName.trim(),
+      brandName,
       extendedField,
       amount: amountInCents,
       readme,
@@ -240,6 +242,8 @@ export async function PUT(request: NextRequest) {
       userId,
       id,
       appCode,
+      tableName,
+      brandName,
       amount,
       readme,
       exampleData,
@@ -269,6 +273,17 @@ export async function PUT(request: NextRequest) {
     
     // 只更新提供的字段
     if (appCode !== undefined) updates.appCode = appCode
+    if (tableName !== undefined) {
+      // 验证表名
+      if (!tableName.trim() || tableName.trim().length < 2) {
+        return NextResponse.json({
+          success: false,
+          error: '表名至少需要2个字符'
+        }, { status: 400 })
+      }
+      updates.tableName = tableName.trim()
+    }
+    if (brandName !== undefined) updates.brandName = brandName
     if (extendedField !== undefined) {
       // 确保扩展字段为新格式并包含标题字段
       if (Array.isArray(extendedField) && extendedField.length > 0) {

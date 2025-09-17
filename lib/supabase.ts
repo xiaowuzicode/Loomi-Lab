@@ -814,6 +814,7 @@ export class CustomFieldStorage {
     appCode: string
     type: string
     tableName: string
+    brandName?: string
     extendedField: any[]
     amount: number
     readme: string
@@ -830,6 +831,7 @@ export class CustomFieldStorage {
           app_code: record.appCode,
           type: record.type,
           table_name: record.tableName,
+          brand_name: record.brandName,
           extended_field: record.extendedField,
           amount: record.amount, // 前端已转换为分
           readme: record.readme,
@@ -858,6 +860,8 @@ export class CustomFieldStorage {
     userId: string, 
     updates: Partial<{
       appCode: string
+      tableName: string
+      brandName: string
       extendedField: any[]
       amount: number
       readme: string
@@ -873,6 +877,8 @@ export class CustomFieldStorage {
 
       // 只更新提供的字段
       if (updates.appCode !== undefined) updateData.app_code = updates.appCode
+      if (updates.tableName !== undefined) updateData.table_name = updates.tableName
+      if (updates.brandName !== undefined) updateData.brand_name = updates.brandName
       if (updates.extendedField !== undefined) updateData.extended_field = updates.extendedField
       if (updates.amount !== undefined) updateData.amount = updates.amount
       if (updates.readme !== undefined) updateData.readme = updates.readme
@@ -1080,6 +1086,7 @@ export class CustomFieldStorage {
       appCode: record.app_code,
       type: record.type,
       tableName: record.table_name || '未命名表格', // 表名字段
+      brandName: record.brand_name, // 品牌名称字段
       extendedField, // 新格式：TableRow[]
       tableFields,   // 新字段：字段名列表
       amount: record.amount / 100, // 转换为元

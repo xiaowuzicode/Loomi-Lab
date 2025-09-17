@@ -6,13 +6,21 @@ import { Folders, type FolderNode, insertFolder, renameFolder, moveFolder, delet
 const uuidV4Regex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 async function userExists(userId: string): Promise<boolean> {
-  const { data, error } = await supabaseServiceRole
-    .from('users')
-    .select('id')
-    .eq('id', userId)
-    .maybeSingle()
-  if (error) return false
-  return !!data
+  try {
+    // 使用RPC函数检查auth.users表中的用户是否存在
+    const { data, error } = await supabaseServiceRole
+      .rpc('lab_check_user_exists', { user_id_param: userId })
+    
+    if (error) {
+      console.error('检查用户是否存在时出错:', error)
+      return false
+    }
+    
+    return !!data
+  } catch (error) {
+    console.error('userExists函数异常:', error)
+    return false
+  }
 }
 
 const TYPE_LABEL_MAP: Record<string, string> = {
