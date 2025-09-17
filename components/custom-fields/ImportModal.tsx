@@ -35,6 +35,7 @@ import {
   Td,
   TableContainer,
   Icon,
+  Switch,
 } from '@chakra-ui/react'
 import {
   RiUploadLine,
@@ -48,8 +49,19 @@ import { parseExcelFile } from '@/lib/excel-utils'
 interface ImportModalProps {
   isOpen: boolean
   onClose: () => void
-  onImport: (data: { fields: string[], data: any[], tableName: string }) => Promise<void>
-  type: string
+  onImport: (data: {
+    fields: string[]
+    data: any[]
+    tableName: string
+    type?: string
+    readme?: string
+    exampleData?: string
+    visibility?: boolean
+    isPublic?: boolean
+    appCode?: string
+    amount?: number
+  }) => Promise<void>
+  type?: string
   loading?: boolean
 }
 
@@ -62,6 +74,13 @@ export function ImportModal({
 }: ImportModalProps) {
   const [file, setFile] = useState<File | null>(null)
   const [tableName, setTableName] = useState('')
+  const [typeInput, setTypeInput] = useState(type || '')
+  const [readme, setReadme] = useState('')
+  const [exampleData, setExampleData] = useState('')
+  const [visibility, setVisibility] = useState(true)
+  const [isPublic, setIsPublic] = useState(false)
+  const [appCode, setAppCode] = useState('loomi')
+  const [amount, setAmount] = useState<number>(0)
   const [parseResult, setParseResult] = useState<{
     fields: string[]
     data: any[]
@@ -154,7 +173,14 @@ export function ImportModal({
       await onImport({
         fields: parseResult.fields,
         data: parseResult.data,
-        tableName: tableName.trim()
+        tableName: tableName.trim(),
+        type: typeInput.trim(),
+        readme: readme.trim(),
+        exampleData: exampleData.trim(),
+        visibility,
+        isPublic,
+        appCode: appCode.trim(),
+        amount: Number(amount) || 0
       })
       handleClose()
     } catch (error) {
@@ -174,10 +200,8 @@ export function ImportModal({
     onClose()
   }
 
-  const normalizedType = type?.trim()
-  const typeLabel = normalizedType && normalizedType !== '数据' ? normalizedType : ''
-  const modalTitle = typeLabel ? `导入${typeLabel}数据` : '导入数据'
-  const tablePlaceholder = typeLabel ? `请输入${typeLabel}表格名称` : '请输入表格名称'
+  const modalTitle = '导入数据表'
+  const tablePlaceholder = '请输入表格名称'
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} size="xl">
@@ -249,6 +273,57 @@ export function ImportModal({
                 placeholder={tablePlaceholder}
               />
             </FormControl>
+
+            {/* 额外参数（与新建表一致） */}
+            <FormControl>
+              <FormLabel>类型</FormLabel>
+              <Input
+                value={typeInput}
+                onChange={(e) => setTypeInput(e.target.value)}
+                placeholder="请输入类型（可留空）"
+              />
+            </FormControl>
+
+            <FormControl>
+              <FormLabel>📖 表格说明</FormLabel>
+              <Input
+                value={readme}
+                onChange={(e) => setReadme(e.target.value)}
+                placeholder="可填写表格说明"
+              />
+            </FormControl>
+
+            <FormControl>
+              <FormLabel>💡 示例数据</FormLabel>
+              <Input
+                value={exampleData}
+                onChange={(e) => setExampleData(e.target.value)}
+                placeholder="可填写示例数据说明"
+              />
+            </FormControl>
+
+            <HStack spacing={6}>
+              <FormControl display="flex" alignItems="center">
+                <FormLabel mb={0}>👁️ 可见性</FormLabel>
+                <Switch isChecked={visibility} onChange={(e) => setVisibility(e.target.checked)} />
+              </FormControl>
+              <FormControl display="flex" alignItems="center">
+                <FormLabel mb={0}>🌐 公开性</FormLabel>
+                <Switch isChecked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
+              </FormControl>
+            </HStack>
+
+            <HStack spacing={6}>
+              <FormControl>
+                <FormLabel>应用代码</FormLabel>
+                <Input value={appCode} onChange={(e) => setAppCode(e.target.value)} placeholder="loomi" />
+              </FormControl>
+              <FormControl>
+                <FormLabel>金额 (元)</FormLabel>
+                <Input type="number" min="0" step="0.01" value={amount}
+                  onChange={(e) => setAmount(parseFloat(e.target.value) || 0)} placeholder="0" />
+              </FormControl>
+            </HStack>
 
             {/* 解析结果展示 */}
             {parseResult && (

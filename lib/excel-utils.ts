@@ -176,23 +176,13 @@ export const downloadExcelTemplate = async (type: string) => {
   try {
     const XLSX = await import('xlsx')
     
-    // 默认字段（基础模板）
-    const defaultFields = ['标题', '示例字段1', '示例字段2', '示例字段3']
+    // 默认字段（基础模板，可为空/自由填）
+    const defaultFields = ['列1', '列2', '列3']
     
     // 创建模板数据（示例行）
     const templateData = [
-      {
-        标题: '示例标题1',
-        示例字段1: '这是示例字段1内容...',
-        示例字段2: '示例字段2',
-        示例字段3: '示例字段3'
-      },
-      {
-        标题: '示例标题2', 
-        示例字段1: '这是另一个示例...',
-        示例字段2: '示例字段2',
-        示例字段3: '示例字段3',
-      }
+      { 列1: '', 列2: '', 列3: '' },
+      { 列1: '', 列2: '', 列3: '' }
     ]
     
     // 创建工作簿
@@ -202,16 +192,14 @@ export const downloadExcelTemplate = async (type: string) => {
     const worksheet = XLSX.utils.json_to_sheet(templateData)
     
     // 设置列宽
-    const columnWidths = defaultFields.map(field => ({
-      wpx: field === '标题' ? 200 : field === '正文' ? 300 : 120
-    }))
+    const columnWidths = defaultFields.map(() => ({ wpx: 120 }))
     worksheet['!cols'] = columnWidths
     
     // 添加工作表
-    XLSX.utils.book_append_sheet(workbook, worksheet, `${type}数据模板`)
+    XLSX.utils.book_append_sheet(workbook, worksheet, `数据模板`)
     
     // 下载文件
-    const fileName = `${type}数据导入模板_${new Date().toISOString().split('T')[0]}.xlsx`
+    const fileName = `数据导入模板_${new Date().toISOString().split('T')[0]}.xlsx`
     XLSX.writeFile(workbook, fileName)
     
     return {
@@ -254,16 +242,14 @@ export const parseExcelFile = async (file: File): Promise<{
       throw new Error('Excel文件中没有数据')
     }
     
-    // 第一行作为字段名
-    const fields = (jsonData[0] as string[]).filter(field => field && field.trim())
+    // 第一行作为字段名（允许为空）。如为空，则根据数据行推导列数并生成占位列名
+    let fields = (jsonData[0] as string[]).filter(field => field && String(field).trim())
     
     if (fields.length === 0) {
-      throw new Error('Excel文件中没有有效的字段名')
-    }
-    
-    // 验证必需字段
-    if (!fields.includes('标题')) {
-      throw new Error('Excel文件必须包含"标题"字段')
+      // 统计数据行的最大列数
+      const dataRowsForInfer = jsonData.slice(1) as any[][]
+      const maxCols = dataRowsForInfer.reduce((m, row) => Math.max(m, Array.isArray(row) ? row.length : 0), 0)
+      fields = Array.from({ length: maxCols }, (_, i) => `列${i + 1}`)
     }
     
     // 处理数据行
@@ -301,8 +287,10 @@ export const createTableFromImport = (
   tableName: string,
   userId: string
 ) => {
-  // 确保标题字段在第一位
-  const fields = ['标题', ...importData.fields.filter(field => field !== '标题')]
+  // 使用导入文件的字段顺序；如导入为空数组，生成默认字段
+  const fields = importData.fields && importData.fields.length > 0
+    ? [...importData.fields]
+    : ['列1', '列2']
   
   // 转换数据格式，添加自动生成的ID
   const extendedField = importData.data.map((row, index) => ({
@@ -317,7 +305,7 @@ export const createTableFromImport = (
     type,
     tableName,
     amount: 0,
-    readme: `从Excel导入的${type}数据表`,
+    readme: `从Excel导入的数据表`,
     exampleData: '',
     visibility: true,
     isPublic: false,

@@ -50,6 +50,8 @@ interface TableToolbarProps {
   // 显示控制
   showCreateButton?: boolean
   showMoreActions?: boolean
+  // 关闭当前表格
+  onCloseTable?: () => void
 }
 
 export function TableToolbar({
@@ -69,6 +71,7 @@ export function TableToolbar({
   currentType,
   showCreateButton = true,
   showMoreActions = true,
+  onCloseTable,
 }: TableToolbarProps) {
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -88,6 +91,16 @@ export function TableToolbar({
     <HStack spacing={4} mb={4} justify="space-between" flexWrap="wrap">
       {/* 左侧操作按钮 */}
       <HStack spacing={3}>
+        {onCloseTable && (
+          <Button
+            leftIcon={<RiCloseLine />}
+            variant="outline"
+            onClick={onCloseTable}
+            size="sm"
+          >
+            关闭
+          </Button>
+        )}
         {showCreateButton && (
           <Button
             leftIcon={<RiAddLine />}
@@ -144,9 +157,9 @@ export function TableToolbar({
               <MenuItem icon={<RiFileExcelLine />} onClick={onExportExcel}>
                 导出为Excel
               </MenuItem>
-              {currentType && onDownloadTemplate && (
+              {onDownloadTemplate && (
                 <MenuItem icon={<RiFileDownloadLine />} onClick={onDownloadTemplate}>
-                  下载{currentType}导入模板
+                  下载模板
                 </MenuItem>
               )}
             </MenuList>
