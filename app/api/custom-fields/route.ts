@@ -180,20 +180,8 @@ export async function POST(request: NextRequest) {
     }
     const normalizedType = type.trim()
 
-    // 确保扩展字段为新格式并包含标题字段
-    if (Array.isArray(extendedField) && extendedField.length > 0) {
-      const firstRow = extendedField[0]
-      if (!firstRow || !('标题' in firstRow)) {
-        // 如果没有标题字段，为所有行添加标题字段
-        extendedField.forEach((row: any) => {
-          if (!row['标题']) {
-            row['标题'] = ''
-          }
-        })
-      }
-    } else {
-      // 如果扩展字段为空，创建默认行
-      extendedField = [{ id: 1, 标题: '' }]
+    if (!Array.isArray(extendedField) || extendedField.length === 0) {
+      extendedField = [{ id: 1 }]
     }
 
     // 验证金额
@@ -285,22 +273,12 @@ export async function PUT(request: NextRequest) {
     }
     if (brandName !== undefined) updates.brandName = brandName
     if (extendedField !== undefined) {
-      // 确保扩展字段为新格式并包含标题字段
-      if (Array.isArray(extendedField) && extendedField.length > 0) {
-        const firstRow = extendedField[0]
-        if (!firstRow || !('标题' in firstRow)) {
-          // 如果没有标题字段，为所有行添加标题字段
-          extendedField.forEach((row: any) => {
-            if (!row['标题']) {
-              row['标题'] = ''
-            }
-          })
-        }
-      } else if (Array.isArray(extendedField) && extendedField.length === 0) {
-        // 如果扩展字段为空数组，创建默认行
-        extendedField = [{ id: 1, 标题: '' }]
+      // 不再强制包含“标题”字段；允许空数组
+      if (Array.isArray(extendedField) && extendedField.length === 0) {
+        updates.extendedField = []
+      } else {
+        updates.extendedField = extendedField
       }
-      updates.extendedField = extendedField
     }
     if (amount !== undefined) {
       const amountInCents = Math.round(amount * 100)

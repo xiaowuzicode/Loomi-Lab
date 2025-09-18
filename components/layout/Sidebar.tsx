@@ -19,17 +19,14 @@ import {
   RiDashboardLine,
   RiUser3Line,
   RiWallet3Line,
-  RiBrainLine,
-  RiBookOpenLine,
   RiQuillPenLine,
   RiSettings3Line,
-  RiInstagramLine,
   RiSparklingFill,
   RiMessageLine,
-  RiLightbulbLine,
   RiDatabase2Line,
   RiFileTextLine,
   RiGalleryLine,
+  RiBookmarkLine,
 } from 'react-icons/ri'
 
 // const Box = Box // 暂时移除动画
@@ -69,25 +66,25 @@ const getNavItems = (userCount: number): NavItem[] => [
     icon: RiWallet3Line,
     color: 'yellow.400',
   },
-  {
-    label: '知识库管理',
-    href: '/knowledge-base-v2',
-    icon: RiBrainLine,
-    color: 'purple.400',
-  },
-  {
-    label: '策略库',
-    href: '/strategy-library',
-    icon: RiLightbulbLine,
-    color: 'indigo.400',
-  },
-  {
-    label: '爆文库管理',
-    href: '/content-library',
-    icon: RiBookOpenLine,
-    badge: 'HOT',
-    color: 'red.400',
-  },
+  // {
+    // label: '知识库管理',
+    // href: '/knowledge-base-v2',
+    // icon: RiBrainLine,
+    // color: 'purple.400',
+  // },
+  // {
+    // label: '策略库',
+    // href: '/strategy-library',
+    // icon: RiLightbulbLine,
+    // color: 'indigo.400',
+  // },
+  // {
+    // label: '爆文库管理',
+    // href: '/content-library',
+    // icon: RiBookOpenLine,
+    // badge: 'HOT',
+    // color: 'red.400',
+  // },
   {
     label: '备忘录',
     href: '/memo-folders',
@@ -99,6 +96,12 @@ const getNavItems = (userCount: number): NavItem[] => [
     href: '/posts-library',
     icon: RiGalleryLine,
     color: 'purple.300',
+  },
+  {
+    label: '用户记忆',
+    href: '/user-memory',
+    icon: RiBookmarkLine,
+    color: 'teal.300',
   },
   {
     label: '提示词管理',
@@ -124,12 +127,12 @@ const getNavItems = (userCount: number): NavItem[] => [
     icon: RiMessageLine,
     color: 'orange.400',
   },
-  {
-    label: '小红书管理',
-    href: '/xiaohongshu',
-    icon: RiInstagramLine,
-    color: 'pink.400',
-  },
+  // {
+    // label: '小红书管理',
+    // href: '/xiaohongshu',
+    // icon: RiInstagramLine,
+    // color: 'pink.400',
+  // },
   {
     label: '元数据配置',
     href: '/system-config',

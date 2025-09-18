@@ -40,14 +40,6 @@ export async function PUT(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // 保护标题字段
-    if (fieldName === '标题' && (action === 'remove' || action === 'rename')) {
-      return NextResponse.json({
-        success: false,
-        error: '标题字段不可删除或重命名'
-      }, { status: 400 })
-    }
-
     const updatedRecord = await customFieldStorage.updateTableFields(
       id,
       userId,

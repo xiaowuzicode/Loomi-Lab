@@ -658,10 +658,10 @@ export class CustomFieldStorage {
         .select('*', { count: 'exact' })
         .eq('is_deleted', false) // 软删除过滤
 
-      // 用户权限过滤 - 对于自定义字段管理，显示所有用户的记录
-      // if (userId) {
-      //   query = query.eq('user_id', userId)
-      // }
+      // 用户权限过滤：仅查询目标用户的记录
+      if (userId) {
+        query = query.eq('user_id', userId)
+      }
 
       // 类型筛选
       if (type !== 'all') {
@@ -699,11 +699,9 @@ export class CustomFieldStorage {
         query = query.lte('created_at', dateTo)
       }
 
-      // 搜索功能 (搜索标题和readme字段)
       if (search && search.trim() !== '') {
         query = query.or(
-          `readme.ilike.%${search}%,` +
-          `extended_field->>title.ilike.%${search}%`
+          `readme.ilike.%${search}%`
         )
       }
 
@@ -787,13 +785,10 @@ export class CustomFieldStorage {
         .eq('id', id)
         .eq('is_deleted', false)
 
-      // 权限控制: 管理员可以查看所有记录
-      // if (userId) {
-      //   query = query.or(
-      //     `user_id.eq.${userId},` +
-      //     `and(visibility.eq.true,is_public.eq.true)`
-      //   )
-      // }
+      // 权限控制：仅允许查看目标用户的数据
+      if (userId) {
+        query = query.eq('user_id', userId)
+      }
 
       const { data, error } = await query.single()
 
@@ -890,7 +885,7 @@ export class CustomFieldStorage {
         .from('book_user_custom_fields')
         .update(updateData)
         .eq('id', id)
-        // .eq('user_id', userId) // 移除权限控制：管理员可以更新所有记录
+        .eq('user_id', userId)
         .eq('is_deleted', false)
         .select()
         .single()
@@ -915,7 +910,7 @@ export class CustomFieldStorage {
           updated_at: new Date().toISOString()
         })
         .eq('id', id)
-        // .eq('user_id', userId) // 移除权限控制：管理员可以删除所有记录
+        .eq('user_id', userId)
         .eq('is_deleted', false)
         .select()
         .single()
@@ -937,11 +932,10 @@ export class CustomFieldStorage {
         .from('book_user_custom_fields')
         .select('app_code')
         .eq('is_deleted', false)
-
-      // 用户权限过滤 - 显示所有用户的记录
-      // if (userId) {
-      //   query = query.eq('user_id', userId)
-      // }
+      
+      if (userId) {
+        query = query.eq('user_id', userId)
+      }
 
       const { data, error } = await query
 
@@ -969,11 +963,10 @@ export class CustomFieldStorage {
         .from('book_user_custom_fields')
         .select('type', { count: 'exact' })
         .eq('is_deleted', false)
-
-      // 用户权限过滤 - 统计所有用户的记录
-      // if (userId) {
-      //   baseQuery = baseQuery.eq('user_id', userId)
-      // }
+      
+      if (userId) {
+        baseQuery = baseQuery.eq('user_id', userId)
+      }
 
       // 分别统计三种类型
       const [insightResult, hookResult, emotionResult] = await Promise.all([
@@ -1063,18 +1056,6 @@ export class CustomFieldStorage {
       const firstItem = extendedField[0]
       if (firstItem && 'id' in firstItem) {
         tableFields = Object.keys(firstItem).filter(key => key !== 'id')
-        // 确保标题字段在首位
-        if (tableFields.includes('标题')) {
-          tableFields = ['标题', ...tableFields.filter(field => field !== '标题')]
-        }
-      }
-    }
-
-    // 如果没有字段定义，设置默认字段
-    if (tableFields.length === 0) {
-      tableFields = ['标题', '正文']
-      if (extendedField.length === 0) {
-        extendedField = [{ id: 1, 标题: '', 正文: '' }]
       }
     }
 
