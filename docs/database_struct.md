@@ -173,3 +173,27 @@ create trigger update_knowledge_base_updated_at_trigger BEFORE
 update on knowledge_base for EACH row
 execute FUNCTION update_knowledge_base_updated_at ();
 
+### book_user_memory
+create table public.book_user_memory (
+  id uuid not null default gen_random_uuid (),
+  user_id uuid not null,
+  memory jsonb null,
+  memory_name text not null,
+  level text null,
+  is_deleted boolean not null default false,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  constraint book_user_memory_pkey primary key (id),
+  constraint book_user_memory_user_id_fkey foreign KEY (user_id) references auth.users (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+create index IF not exists idx_book_user_memory_user_id on public.book_user_memory using btree (user_id) TABLESPACE pg_default;
+
+create index IF not exists idx_book_user_memory_memory_gin on public.book_user_memory using gin (memory) TABLESPACE pg_default;
+
+create index IF not exists idx_book_user_memory_is_deleted on public.book_user_memory using btree (is_deleted) TABLESPACE pg_default;
+
+create trigger set_timestamp BEFORE
+update on book_user_memory for EACH row
+execute FUNCTION trigger_set_timestamp ();
+
