@@ -430,7 +430,7 @@ export function ImportModal({
               </HStack>
               <List spacing={1} fontSize="sm" color={infoTextColor}>
                 <ListItem>• Excel文件第一行必须是字段名（表头）</ListItem>
-                <ListItem>• 建议包含"标题"字段（缺失时系统会自动补充空列）</ListItem>
+                {/* 取消“标题必需”提示 */}
                 <ListItem>• 序号将自动生成，无需在Excel中包含</ListItem>
                 <ListItem>• 空行将被自动跳过</ListItem>
                 <ListItem>• 支持 .xlsx 和 .xls 格式</ListItem>

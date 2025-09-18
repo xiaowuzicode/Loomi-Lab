@@ -9,6 +9,7 @@ import {
   Text,
   Input,
   Button,
+  Select,
   Badge,
   Card,
   CardBody,
@@ -50,6 +51,7 @@ export function CustomLibraryView() {
   const [loadedUserId, setLoadedUserId] = useState<string | null>(null)
   const [loadingUser, setLoadingUser] = useState(false)
   const [selectedType, setSelectedType] = useState<string | null>(null)
+  const [typeFilter, setTypeFilter] = useState<'all' | string>('all')
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null)
 
   const typeGroups: TypeGroup[] = useMemo(() => {
@@ -68,6 +70,15 @@ export function CustomLibraryView() {
       tables: tables.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
     }))
   }, [records])
+
+  const allCount = useMemo(() => records.length, [records])
+  const typeOptions = useMemo(() => typeGroups.map(g => ({ type: g.type, count: g.tables.length })), [typeGroups])
+
+  const displayGroups: TypeGroup[] = useMemo(() => {
+    if (typeFilter === 'all') return typeGroups
+    const g = typeGroups.find(x => x.type === typeFilter)
+    return g ? [g] : []
+  }, [typeGroups, typeFilter])
 
   useEffect(() => {
     if (!records.length) {
@@ -176,18 +187,46 @@ export function CustomLibraryView() {
 
             <Divider />
 
+            {/* 类型筛选下拉，与“创建公域表”一致的交互 */}
+            <Box>
+              <Text fontSize="sm" fontWeight="semibold" mb={1}>类型筛选</Text>
+              <Select
+                size="sm"
+                value={typeFilter}
+                onChange={(e) => {
+                  const v = e.target.value as 'all' | string
+                  setTypeFilter(v)
+                  // 联动选择首个表格，避免右侧空白
+                  if (v === 'all') {
+                    const firstGroup = typeGroups[0]
+                    setSelectedType(firstGroup?.type ?? null)
+                    setSelectedTableId(firstGroup?.tables[0]?.id ?? null)
+                  } else {
+                    const target = typeGroups.find(g => g.type === v)
+                    setSelectedType(target?.type ?? null)
+                    setSelectedTableId(target?.tables[0]?.id ?? null)
+                  }
+                }}
+              >
+                <option value="all">全部（{allCount}）</option>
+                {typeOptions.map(opt => (
+                  <option key={opt.type} value={opt.type}>{opt.type}（{opt.count}）</option>
+                ))}
+              </Select>
+            </Box>
+
             {loading || loadingUser ? (
               <HStack justify="center" py={8}>
                 <Spinner size="sm" />
                 <Text fontSize="sm" color={muted}>正在加载表格...</Text>
               </HStack>
-            ) : typeGroups.length === 0 ? (
+            ) : displayGroups.length === 0 ? (
               <Box py={6} textAlign="center" color={muted}>
                 {loadedUserId ? '暂无表格数据' : '输入用户ID后点击加载'}
               </Box>
             ) : (
               <VStack align="stretch" spacing={4} maxH="60vh" overflowY="auto" pr={2}>
-                {typeGroups.map((group) => (
+                {displayGroups.map((group) => (
                   <Box key={group.type}>
                     <HStack spacing={2} mb={2}>
                       <Box as={RiDatabase2Line} color="blue.400" />

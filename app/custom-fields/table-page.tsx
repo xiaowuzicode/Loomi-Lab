@@ -43,7 +43,7 @@ import {
   Wrap,
   WrapItem,
 } from '@chakra-ui/react'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   RiAddLine,
   RiDeleteBinLine,
@@ -52,6 +52,7 @@ import {
   RiInformationLine,
   RiUploadLine,
   RiFileDownloadLine,
+  RiDatabase2Line,
 } from 'react-icons/ri'
 import { PageLayout } from '@/components/layout/PageLayout'
 import { Card } from '@/components/ui/Card'
@@ -242,6 +243,20 @@ export default function CustomFieldsTablePage({
     return item?.tableCount ?? 0
   }, [typeSummary])
 
+  // 分组：用于“全部”视图下显示各类型小标题
+  const groupedTables = useMemo(() => {
+    const map = new Map<string, CustomFieldRecord[]>()
+    tables.forEach((t) => {
+      const typeName = t.type || '未分类'
+      if (!map.has(typeName)) map.set(typeName, [])
+      map.get(typeName)!.push(t)
+    })
+    // 排序：按类型名称升序，保持稳定
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([type, list]) => ({ type, tables: list }))
+  }, [tables])
+
   useEffect(() => {
     if (typeOptions.length === 0) {
       setSelectedType('')
@@ -337,7 +352,7 @@ export default function CustomFieldsTablePage({
     
     // 获取要删除行的标题，用于确认对话框显示
     const rowToDelete = currentTable.extendedField.find(row => row.id === rowId)
-    const rowTitle = rowToDelete?.['标题'] || `ID: ${rowId}`
+    const rowTitle = `ID: ${rowId}`
     
     setPendingDeleteRow({ id: rowId, title: rowTitle })
   }
@@ -1054,67 +1069,142 @@ export default function CustomFieldsTablePage({
           </Text>
 
           {/* 表格列表 */}
-          <Box mt={6}>
-            <HStack justify="space-between" align="center" mb={3}>
-              <Text fontWeight="semibold" color={textColor}>
-                {activeTypeName ? `${activeTypeName}类型表格` : '全部表格'}
-              </Text>
-            </HStack>
-            <VStack spacing={2} align="stretch">
-              {loading ? (
-                Array.from({ length: 3 }).map((_, index) => (
-                  <Skeleton key={index} height="40px" borderRadius="md" />
-                ))
-              ) : tables.length === 0 ? (
-                <Text color={mutedTextColor} textAlign="center" py={4} fontSize="sm">
-                  暂无{activeTypeName ? `${activeTypeName}表格` : '表格'}
-                </Text>
-              ) : (
-                tables.map((table) => (
-                  <Box
-                    key={table.id}
-                    position="relative"
-                    role="group"
-                    p={3}
-                    border="1px"
-                    borderColor={borderColor}
-                    borderRadius="md"
-                    cursor="pointer"
-                    bg={currentTable?.id === table.id ? selectedBgColor : 'transparent'}
-                    _hover={{ bg: currentTable?.id === table.id ? selectedHoverBgColor : selectedBgColor }}
-                    onClick={() => handleTableSelect(table)}
-                  >
-                    <HStack justify="space-between" align="center">
-                      <Box flex={1} minW={0}>
-                        <Text fontSize="sm" fontWeight="medium" noOfLines={1}>
-                          {table.tableName}
-                        </Text>
-                        <Text fontSize="xs" color={mutedTextColor}>
-                          {table.extendedField.length} 行数据
-                        </Text>
+          <Box mt={6} maxH="60vh" overflowY="auto" pr={1}>
+            {selectedType === '全部' ? (
+              // 全部视图：按类型分组显示
+              <VStack spacing={6} align="stretch">
+                {loading ? (
+                  Array.from({ length: 3 }).map((_, index) => (
+                    <Skeleton key={index} height="40px" borderRadius="md" />
+                  ))
+                ) : groupedTables.length === 0 ? (
+                  <Text color={mutedTextColor} textAlign="center" py={4} fontSize="sm">
+                    暂无表格
+                  </Text>
+                ) : (
+                  groupedTables.map(group => (
+                    <Box key={group.type}>
+                      <HStack spacing={2} align="center" mb={2}>
+                        <Icon as={RiDatabase2Line} color="blue.400" />
+                        <Text fontWeight="semibold" color={textColor}>{group.type}</Text>
+                        <Tag size="sm" variant="subtle" colorScheme="gray">
+                          <TagLabel>{group.tables.length}</TagLabel>
+                        </Tag>
+                      </HStack>
+                      <VStack spacing={2} align="stretch">
+                        {group.tables.map((table) => (
+                          <Box
+                            key={table.id}
+                            position="relative"
+                            role="group"
+                            p={3}
+                            border="1px"
+                            borderColor={borderColor}
+                            borderRadius="md"
+                            cursor="pointer"
+                            bg={currentTable?.id === table.id ? selectedBgColor : 'transparent'}
+                            _hover={{ bg: currentTable?.id === table.id ? selectedHoverBgColor : selectedBgColor }}
+                            onClick={() => handleTableSelect(table)}
+                          >
+                            <HStack justify="space-between" align="center">
+                              <Box flex={1} minW={0}>
+                                <Text fontSize="sm" fontWeight="medium" noOfLines={1}>
+                                  {table.tableName}
+                                </Text>
+                                <Text fontSize="xs" color={mutedTextColor}>
+                                  {table.extendedField.length} 行数据
+                                </Text>
+                              </Box>
+                              <IconButton
+                                icon={<RiCloseLine />}
+                                size="xs"
+                                variant="ghost"
+                                colorScheme="red"
+                                aria-label="删除表格"
+                                opacity={0}
+                                _groupHover={{ opacity: 1 }}
+                                transition="opacity 0.2s"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleTableDelete(table)
+                                }}
+                                zIndex={1}
+                              />
+                            </HStack>
+                          </Box>
+                        ))}
+                      </VStack>
+                    </Box>
+                  ))
+                )}
+              </VStack>
+            ) : (
+              // 单一类型视图
+              <>
+                <HStack spacing={2} align="center" mb={3}>
+                  <Icon as={RiDatabase2Line} color="blue.400" />
+                  <Text fontWeight="semibold" color={textColor}>
+                    {activeTypeName || '未分类'}
+                  </Text>
+                  <Tag size="sm" variant="subtle" colorScheme="gray">
+                    <TagLabel>{getTypeCount(selectedType || '全部')}</TagLabel>
+                  </Tag>
+                </HStack>
+                <VStack spacing={2} align="stretch">
+                  {loading ? (
+                    Array.from({ length: 3 }).map((_, index) => (
+                      <Skeleton key={index} height="40px" borderRadius="md" />
+                    ))
+                  ) : tables.length === 0 ? (
+                    <Text color={mutedTextColor} textAlign="center" py={4} fontSize="sm">
+                      暂无{activeTypeName ? `${activeTypeName}表格` : '表格'}
+                    </Text>
+                  ) : (
+                    tables.map((table) => (
+                      <Box
+                        key={table.id}
+                        position="relative"
+                        role="group"
+                        p={3}
+                        border="1px"
+                        borderColor={borderColor}
+                        borderRadius="md"
+                        cursor="pointer"
+                        bg={currentTable?.id === table.id ? selectedBgColor : 'transparent'}
+                        _hover={{ bg: currentTable?.id === table.id ? selectedHoverBgColor : selectedBgColor }}
+                        onClick={() => handleTableSelect(table)}
+                      >
+                        <HStack justify="space-between" align="center">
+                          <Box flex={1} minW={0}>
+                            <Text fontSize="sm" fontWeight="medium" noOfLines={1}>
+                              {table.tableName}
+                            </Text>
+                            <Text fontSize="xs" color={mutedTextColor}>
+                              {table.extendedField.length} 行数据
+                            </Text>
+                          </Box>
+                          <IconButton
+                            icon={<RiCloseLine />}
+                            size="xs"
+                            variant="ghost"
+                            colorScheme="red"
+                            aria-label="删除表格"
+                            opacity={0}
+                            _groupHover={{ opacity: 1 }}
+                            transition="opacity 0.2s"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleTableDelete(table)
+                            }}
+                            zIndex={1}
+                          />
+                        </HStack>
                       </Box>
-                      
-                      {/* 删除按钮 - 悬停时显示 */}
-                      <IconButton
-                        icon={<RiCloseLine />}
-                        size="xs"
-                        variant="ghost"
-                        colorScheme="red"
-                        aria-label="删除表格"
-                        opacity={0}
-                        _groupHover={{ opacity: 1 }}
-                        transition="opacity 0.2s"
-                        onClick={(e) => {
-                          e.stopPropagation() // 防止触发表格选择
-                          handleTableDelete(table)
-                        }}
-                        zIndex={1}
-                      />
-                    </HStack>
-                  </Box>
-                ))
-              )}
-            </VStack>
+                    ))
+                  )}
+                </VStack>
+              </>
+            )}
           </Box>
         </Box>
 

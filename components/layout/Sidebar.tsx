@@ -127,12 +127,12 @@ const getNavItems = (userCount: number): NavItem[] => [
     icon: RiMessageLine,
     color: 'orange.400',
   },
-  //{
+  // {
     // label: '小红书管理',
     // href: '/xiaohongshu',
     // icon: RiInstagramLine,
     // color: 'pink.400',
-  //},
+  // },
   {
     label: '元数据配置',
     href: '/system-config',

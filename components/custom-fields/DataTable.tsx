@@ -210,8 +210,8 @@ export function DataTable({
             
             {/* 动态字段表头 */}
             {fields.map((field) => {
-              const isTitle = field === '标题'
-              const canSort = onFieldSort && field !== '标题'
+              const isTitle = false
+              const canSort = !!onFieldSort
               const canManage = onFieldFilter
               const isSorted = sortField === field
               
@@ -430,7 +430,7 @@ export function DataTable({
 
                 {/* 动态字段单元格 */}
                 {fields.map((field) => {
-                  const isTitle = field === '标题'
+                  const isTitle = false
                   return (
                     <Td 
                       key={field} 
@@ -508,7 +508,7 @@ export function DataTable({
 
               {/* 字段编辑区域 */}
               {fields.map((field) => {
-                const isTitle = field === '标题'
+                const isTitle = false
                 return (
                   <Td 
                     key={field} 
