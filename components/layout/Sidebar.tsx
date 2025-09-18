@@ -114,7 +114,7 @@ const getNavItems = (userCount: number): NavItem[] => [
   },
   {
     label: '创建公域表',
-    href: '/custom-library/public',
+    href: '/custom-library/global',
     icon: RiDatabase2Line,
     color: 'cyan.400',
   },
