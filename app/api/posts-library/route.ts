@@ -150,11 +150,13 @@ export async function GET(request: NextRequest) {
       }
       const metaObj = ensureObject(meta)
       const title = metaObj.title || row.title || '(未命名)'
+      const tags = ensureArray(metaObj.tags)
       return {
         id: row.id,
         title,
         fold_id: row.fold_id,
         updated_at: row.updated_at,
+        tags,
       }
     })
 
