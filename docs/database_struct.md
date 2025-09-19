@@ -153,6 +153,7 @@ create table public.knowledge_base (
   url text null,
   fold_id uuid null,
   project_id uuid null,
+  embedding public.vector null,
   constraint knowledge_base_pkey primary key (id),
   constraint knowledge_base_user_id_fkey foreign KEY (user_id) references auth.users (id) on delete CASCADE
 ) TABLESPACE pg_default;
@@ -168,6 +169,10 @@ create index IF not exists idx_knowledge_base_content_type on public.knowledge_b
 create index IF not exists idx_knowledge_base_tags on public.knowledge_base using gin (tags) TABLESPACE pg_default;
 
 create index IF not exists idx_knowledge_base_meta_data on public.knowledge_base using gin (meta_data) TABLESPACE pg_default;
+
+create index IF not exists knowledge_base_embedding_idx on public.knowledge_base using ivfflat (embedding vector_cosine_ops)
+with
+  (lists = '100') TABLESPACE pg_default;
 
 create trigger update_knowledge_base_updated_at_trigger BEFORE
 update on knowledge_base for EACH row
