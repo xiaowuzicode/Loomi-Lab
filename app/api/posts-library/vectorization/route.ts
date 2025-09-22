@@ -14,6 +14,7 @@ interface VectorizeRequestBody {
   userId?: string
   ids?: string[]
   concurrency?: number
+  force?: boolean
 }
 
 interface VectorizeResultItem {
@@ -47,7 +48,7 @@ function extractErrorMessage(error: unknown): string {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json().catch(() => ({}))) as VectorizeRequestBody
-    const { userId, ids, concurrency } = body || {}
+    const { userId, ids, concurrency, force } = body || {}
 
     if (!isValidUuid(userId)) {
       return NextResponse.json<ApiResponse>({ success: false, error: 'userId 缺失或格式无效' }, { status: 400 })
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
           results.push({ id, status: 'not_found', error: '记录不存在或不属于该用户' })
           return
         }
-        if (record.embedding) {
+        if (record.embedding && !force) {
           results.push({ id, status: 'skipped', error: '已存在向量，跳过' })
           return
         }
