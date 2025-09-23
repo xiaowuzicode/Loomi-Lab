@@ -9,6 +9,7 @@ interface VectorSearchRequestBody {
   topK?: number
   minScore?: number
   foldId?: string | null
+  days?: number
 }
 
 function sanitizeTopK(raw: unknown): number {
@@ -27,7 +28,7 @@ function sanitizeMinScore(raw: unknown): number {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json().catch(() => ({}))) as VectorSearchRequestBody
-    const { userId, query, topK, minScore, foldId } = body || {}
+    const { userId, query, topK, minScore, foldId, days } = body || {}
 
     if (!isValidUuid(userId)) {
       return NextResponse.json<ApiResponse>({ success: false, error: 'userId 缺失或格式无效' }, { status: 400 })
@@ -111,21 +112,46 @@ export async function POST(request: NextRequest) {
       score: typeof row.score === 'number' ? row.score : 0,
     }))
 
-    if (typeof parsedFold !== 'undefined') {
+    // 二次过滤：按 foldId 与 days
+    if (typeof parsedFold !== 'undefined' || (typeof days === 'number' && Number.isFinite(days) && days > 0)) {
       const ids = rawResults.map((r: { id: string }) => r.id)
       if (ids.length > 0) {
-        const { data: foldRows, error: foldErr } = await supabaseServiceRole
+        // 计算起始日期
+        let dateFromISO: string | undefined
+        if (typeof days === 'number' && Number.isFinite(days) && days > 0) {
+          const now = new Date()
+          const from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+          dateFromISO = from.toISOString()
+        }
+
+        const selectCols = 'id,fold_id,created_at'
+        const { data: filterRows, error: filterErr } = await supabaseServiceRole
           .from('knowledge_base')
-          .select('id,fold_id')
+          .select(selectCols)
           .in('id', ids)
           .eq('user_id', userId)
 
-        const foldMap = new Map<string, string | null>((foldRows || []).map((r: { id: string; fold_id: string | null }) => [r.id, r.fold_id]))
+        if (filterErr) {
+          console.error('向量检索过滤查询失败:', filterErr)
+          return NextResponse.json<ApiResponse>({ success: false, error: '向量检索过滤失败' }, { status: 500 })
+        }
+
+        const foldMap = new Map<string, string | null>((filterRows || []).map((r: any) => [r.id as string, r.fold_id as (string | null)]))
+        const createdMap = new Map<string, string>((filterRows || []).map((r: any) => [r.id as string, r.created_at as string]))
+
         rawResults = rawResults.filter((r: { id: string }) => {
-          const f = foldMap.get(r.id)
-          if (parsedFold === null) return f === null
-          // parsedFold 为 uuid
-          return f === parsedFold
+          // fold 过滤
+          if (typeof parsedFold !== 'undefined') {
+            const f = foldMap.get(r.id)
+            if (parsedFold === null) { if (f !== null) return false } else { if (f !== parsedFold) return false }
+          }
+          // days 过滤
+          if (dateFromISO) {
+            const ts = createdMap.get(r.id)
+            if (!ts) return false
+            if (new Date(ts).getTime() < new Date(dateFromISO).getTime()) return false
+          }
+          return true
         })
       } else {
         rawResults = []
