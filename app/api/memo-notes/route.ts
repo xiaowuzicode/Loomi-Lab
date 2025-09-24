@@ -34,6 +34,14 @@ function parseFoldIdParam(val: string | null): string | null | undefined {
   return v
 }
 
+// 校验 noteType 参数
+function validateNoteType(val: string | null): string | null {
+  if (!val) return null
+  const trimmed = String(val).trim().toLowerCase()
+  if (trimmed === 'notes' || trimmed === 'brand_info') return trimmed
+  return null
+}
+
 // 限制字符串长度（按字节近似）
 function exceedsBytes(text: string, maxBytes: number) {
   try {
@@ -81,6 +89,12 @@ export async function GET(request: NextRequest) {
     }
 
     // 列表
+    const noteTypeParam = searchParams.get('noteType')
+    const noteType = validateNoteType(noteTypeParam)
+    if (!noteType) {
+      return NextResponse.json<ApiResponse>({ success: false, error: 'noteType 缺失或无效，仅支持 notes/brand_info' }, { status: 400 })
+    }
+
     const foldIdParam = searchParams.get('foldId')
     const foldId = parseFoldIdParam(foldIdParam)
     if (foldIdParam !== null && foldId === undefined) {
@@ -98,6 +112,7 @@ export async function GET(request: NextRequest) {
       .from('book_notes')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
+      .eq('note_type', noteType)
       .eq('is_deleted', false)
 
     if (foldId !== undefined) {
@@ -120,6 +135,7 @@ export async function GET(request: NextRequest) {
       .from('book_notes')
       .select('id,note_name,fold_id,updated_at')
       .eq('user_id', userId)
+      .eq('note_type', noteType)
       .eq('is_deleted', false)
       .order('updated_at', { ascending: false })
       .range(offset, offset + limit - 1)
@@ -157,10 +173,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { userId, note_name, note = '', fold_id = null } = body || {}
+    const { userId, note_type, note_name, note = '', fold_id = null } = body || {}
 
     if (!userId || !uuidV4Regex.test(userId)) {
       return NextResponse.json<ApiResponse>({ success: false, error: 'userId 缺失或格式无效' }, { status: 400 })
+    }
+    const validatedNoteType = validateNoteType(note_type)
+    if (!validatedNoteType) {
+      return NextResponse.json<ApiResponse>({ success: false, error: 'note_type 缺失或无效，仅支持 notes/brand_info' }, { status: 400 })
     }
     if (!note_name || String(note_name).trim().length < 1 || String(note_name).trim().length > 100) {
       return NextResponse.json<ApiResponse>({ success: false, error: 'note_name 长度需为 1-100' }, { status: 400 })
@@ -184,6 +204,7 @@ export async function POST(request: NextRequest) {
     const payload = {
       user_id: userId,
       created_user_id: userId,
+      note_type: validatedNoteType,
       fold_id: fold_id,
       note_name: String(note_name).trim(),
       note: note,

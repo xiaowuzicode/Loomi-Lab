@@ -23,17 +23,13 @@ async function userExists(userId: string): Promise<boolean> {
   }
 }
 
-const TYPE_LABEL_MAP: Record<string, string> = {
-  memo: '备忘录',
-  posts: '帖子',
-}
+const ALLOWED_TYPES = new Set(['hot_content', 'brand_info', 'notes'])
 
-function resolveFoldType(type: unknown): string | null {
+function validateFoldType(type: unknown): string | null {
   if (typeof type !== 'string') return null
   const trimmed = type.trim()
   if (!trimmed) return null
-  const mapped = TYPE_LABEL_MAP[trimmed.toLowerCase()]
-  return mapped || trimmed
+  return ALLOWED_TYPES.has(trimmed) ? trimmed : null
 }
 
 async function getUserRecord(userId: string, foldType: string) {
@@ -75,7 +71,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('userId')
     const typeParam = searchParams.get('type')
-    const foldType = resolveFoldType(typeParam)
+    const foldType = validateFoldType(typeParam)
 
     if (!userId) {
       return NextResponse.json({ success: false, error: '缺少必填参数：userId' }, { status: 400 })
@@ -84,7 +80,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'userId 格式无效，必须是标准UUID格式' }, { status: 400 })
     }
     if (!foldType) {
-      return NextResponse.json({ success: false, error: '缺少必填参数：type' }, { status: 400 })
+      return NextResponse.json({ success: false, error: 'type 缺失或非法，仅支持 hot_content/brand_info/notes' }, { status: 400 })
     }
 
     const existing = await getUserRecord(userId, foldType)
@@ -113,7 +109,7 @@ export async function POST(request: NextRequest) {
     if (!userId || !uuidV4Regex.test(userId)) {
       return NextResponse.json({ success: false, error: 'userId 缺失或格式无效' }, { status: 400 })
     }
-    const foldType = resolveFoldType(type)
+    const foldType = validateFoldType(type)
     if (!foldType) {
       return NextResponse.json({ success: false, error: 'type 缺失或格式无效' }, { status: 400 })
     }
@@ -156,7 +152,7 @@ export async function PUT(request: NextRequest) {
     if (!userId || !uuidV4Regex.test(userId)) {
       return NextResponse.json({ success: false, error: 'userId 缺失或格式无效' }, { status: 400 })
     }
-    const foldType = resolveFoldType(type)
+    const foldType = validateFoldType(type)
     if (!foldType) {
       return NextResponse.json({ success: false, error: 'type 缺失或格式无效' }, { status: 400 })
     }
@@ -212,7 +208,7 @@ export async function DELETE(request: NextRequest) {
     if (!userId || !uuidV4Regex.test(userId)) {
       return NextResponse.json({ success: false, error: 'userId 缺失或格式无效' }, { status: 400 })
     }
-    const foldType = resolveFoldType(type)
+    const foldType = validateFoldType(type)
     if (!foldType) {
       return NextResponse.json({ success: false, error: 'type 缺失或格式无效' }, { status: 400 })
     }
